@@ -64,7 +64,7 @@ include(FindPCAP.cmake)
 
 add_definitions(-std=c++17)   #boost需要17版以上
 set( CMAKE_CXX_STANDARD 17 )
-set( CMAKE_CXX_STANDARD_REQUIRE )
+set( CMAKE_CXX_STANDARD_REQUIRED )
 set( CMAKE_CXX_EXTENSIONS OFF )
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILE})          #設定執行檔名稱及對應程式碼

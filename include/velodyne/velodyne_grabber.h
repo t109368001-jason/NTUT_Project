@@ -118,14 +118,11 @@ namespace velodyne {
                         continue;
                     }
 					cloud.reset(new PointCloudT());
-                    std::cout << "AAAA" << std::endl;
                     for(int i = 0; i < vlp16s.size(); i++) {
 						(*vlp16s[i]) >> cloud;
                     }
 
-                    std::cout << "BBBB" << std::endl;
 					this->callback(cloud);
-                    std::cout << "CCCC" << std::endl;
                     this->nextFrame();
                     frameNumber = frameNumber + 1;
                 }
@@ -154,6 +151,7 @@ namespace velodyne {
             void start() {
                 isRun_ = true;
                 thread.reset( new std::thread( std::bind( &VLP16Grabber::run, this ) ));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
 
             void pause(const bool pause) {
