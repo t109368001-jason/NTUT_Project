@@ -74,6 +74,8 @@ int main(int argc, char * argv[])
         boost::shared_ptr<velodyne::VLP16> vlp16_2(new velodyne::VLP16);
 
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combinedCloud;
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> cloudBefore;
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> cloudAfter;
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
 
         if(!myFunction::fileExists(tmp_path.string()))
@@ -104,6 +106,9 @@ int main(int argc, char * argv[])
         //boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> cloud_1(myFunction::XYZ_to_XYZRGB<pcl::PointXYZ>(inputCloud_1, false));
         //boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> cloud_2(myFunction::XYZ_to_XYZRGB<pcl::PointXYZ>(inputCloud_2, false));
         combinedCloud.reset(new pcl::PointCloud<pcl::PointXYZ>);
+        cloudBefore.reset(new pcl::PointCloud<pcl::PointXYZ>);
+        cloudAfter.reset(new pcl::PointCloud<pcl::PointXYZ>);
+
         //combinedCloud = myFunction::combineCloud<pcl::PointXYZ>(inputCloud_1, inputCloud_2);
 
 
@@ -116,7 +121,9 @@ int main(int argc, char * argv[])
             pcl::io::loadPCDFile(backgroundPcdPath.string(), *back);
         }
 
+        /*
         boost::mutex mutex;
+        
         boost::function<void( const boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& )> function =
             [ &combinedCloud, &mutex ]( const boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& ptr ){
                 boost::mutex::scoped_lock lock( mutex );
@@ -124,17 +131,33 @@ int main(int argc, char * argv[])
                 combinedCloud = ptr;
             };// VLP Grabber
 
-
+*/
         grabber.add(vlp16_1, 0);
         grabber.add(vlp16_2, 2);
-        grabber.registerCallback(function);
+        //grabber.registerCallback(function);
         //grabber.toFolder(tmp_path.string());
 
         
-        grabber.start();
-        
-        int i = 0;
+        //grabber.start();
 
+        cloudBefore = grabber.getCloud();
+        grabber.nextFrame(5);
+
+        cloudAfter = grabber.getCloud();
+        grabber.nextFrame(1);
+
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> noChangeCloud = myFunction::getNoChanges<pcl::PointXYZ>(cloudBefore, cloudAfter, 1.0);
+        pcl::io::savePCDFileBinaryCompressed("back.pcd", *(noChangeCloud));
+        
+        while( !viewer->wasStopped() ){
+            viewer->spinOnce();
+            myFunction::updateCloud<pcl::PointXYZ>(viewer, noChangeCloud, "noChangeCloud", 1.0, false, 0.0, 2000.0);
+        }
+
+        
+
+
+/*
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
             boost::mutex::scoped_try_lock lock( mutex );
@@ -143,7 +166,7 @@ int main(int argc, char * argv[])
 
             }
         }
-
+*/
 
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
