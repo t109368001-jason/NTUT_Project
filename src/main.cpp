@@ -119,12 +119,9 @@ int main(int argc, char * argv[])
         boost::mutex mutex;
         boost::function<void( const boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& )> function =
             [ &combinedCloud, &mutex ]( const boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& ptr ){
-                    std::cout << "DDDD" << std::endl;
                 boost::mutex::scoped_lock lock( mutex );
-                    std::cout << "EEEE" << std::endl;
 
                 combinedCloud = ptr;
-                    std::cout << "FFFF" << std::endl;
             };// VLP Grabber
 
 
@@ -135,9 +132,8 @@ int main(int argc, char * argv[])
 
         
         grabber.start();
+        
         int i = 0;
-
-
 
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
