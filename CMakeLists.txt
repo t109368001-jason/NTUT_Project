@@ -56,13 +56,16 @@ include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-#find_package( OpenCV REQUIRED )
+find_package( OpenCV )
 #include_directories( ${OpenCV_INCLUDE_DIRS} )
 
 include(FindPCAP.cmake)
 #include(FindZipIos.cmake)
 
 add_definitions(-std=c++17)   #boost需要17版以上
+set( CMAKE_CXX_STANDARD 17 )
+set( CMAKE_CXX_STANDARD_REQUIRE )
+set( CMAKE_CXX_EXTENSIONS OFF )
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILE})          #設定執行檔名稱及對應程式碼
 if(OpenCV_LIBS)
