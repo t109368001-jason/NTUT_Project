@@ -36,10 +36,10 @@ args::ArgumentParser parser("This is a test program.", "This goes after the opti
 args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
 
 args::Group requirementGroup(parser, "This group is all required:", args::Group::Validators::All);
-    args::ValueFlag<std::string> inputPcapArg_1(requirementGroup, "inputPcap1", "input pcap1", {"p1"});
-    args::ValueFlag<std::string> inputPcapArg_2(requirementGroup, "inputPcap2", "input pcap2", {"p2"});
+args::ValueFlag<std::string> inputPcapArg_1(requirementGroup, "inputPcap1", "input pcap1", {"p1"});
+args::ValueFlag<std::string> inputPcapArg_2(requirementGroup, "inputPcap2", "input pcap2", {"p2"});
 args::Group optionalGroup(parser, "This group is all optional:", args::Group::Validators::DontCare);
-    args::ValueFlag<std::string> backgroundPcdArg(optionalGroup, "backgroundPcd", "background pcd", {"bg"});
+args::ValueFlag<std::string> backgroundPcdArg(optionalGroup, "backgroundPcd", "background pcd", {"bg"});
     
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing);
 
@@ -136,22 +136,34 @@ int main(int argc, char * argv[])
         grabber.add(vlp16_2, 2);
         //grabber.registerCallback(function);
         //grabber.toFolder(tmp_path.string());
-
-        
         //grabber.start();
+        std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> combineCloud;
+        
+        for(int i = 0; i<10; i++)
+        {
+            combineCloud.push_back(grabber.getCloud());
+        }
 
-        cloudBefore = grabber.getCloud();
-        grabber.nextFrame(5);
+        std::cout<< combineCloud.size() << std::endl;
 
-        cloudAfter = grabber.getCloud();
-        grabber.nextFrame(1);
+        grabber.nextFrame(1000);
 
-        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> noChangeCloud = myFunction::getNoChanges<pcl::PointXYZ>(cloudBefore, cloudAfter, 1.0);
-        pcl::io::savePCDFileBinaryCompressed("back.pcd", *(noChangeCloud));
+        for(int i = 0; i < combineCloud.size(); i++)
+        {
+            combineCloud[i] = myFunction::getNoChanges<pcl::PointXYZ>(combineCloud[i], grabber.getCloud(), 0.1);
+        }
+
+        for(int i = 1; i < combineCloud.size(); i++)
+        {
+            combineCloud[0] = myFunction::combineCloud<pcl::PointXYZ>(combineCloud[0], combineCloud[i]);
+            std::cout<< combineCloud[0]->size() / combineCloud[i]->size() * 100 << "present\n";
+        }
+
+        pcl::io::savePCDFileBinaryCompressed("back.pcd", *(combineCloud[0]));
         
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
-            myFunction::updateCloud<pcl::PointXYZ>(viewer, noChangeCloud, "noChangeCloud", 1.0, false, 0.0, 2000.0);
+            myFunction::updateCloud<pcl::PointXYZ>(viewer, combineCloud[0], "combineCloud", 1.0, false, 0.0, 2000.0);
         }
 
         
