@@ -61,7 +61,8 @@
         "string_view": "cpp",
         "filesystem": "cpp",
         "slist": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "nonlinearoptimization": "cpp"
     },
     "cmake.configureOnOpen": true
 }

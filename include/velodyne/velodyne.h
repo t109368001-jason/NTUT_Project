@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <pcl/point_cloud.h>
+#include <Eigen/src/Core/Matrix.h>
 #ifndef MAX_QUEUE_SIZE
 #include "../../3rdparty/VelodyneCapture/.h"
 #else
@@ -25,16 +26,28 @@ namespace velodyne {
             double offsetZ;
             std::string filename;
             std::vector<Laser> lasers;
+            bool transform;
+            Eigen::Matrix4f transformMatrix;
 
-            VLP16() : VLP16Capture(), frameNumber(-1), offsetX(0.0), offsetY(0.0), offsetZ(0.0), offsetAzimuth(0.0) {};
+            VLP16() : VLP16Capture(), frameNumber(-1), offsetX(0.0), offsetY(0.0), offsetZ(0.0), offsetAzimuth(0.0), transform(false), transformMatrix(Eigen::Matrix4f::Identity()) {};
 
             const bool open( const std::string& filename ) {
                 this->filename = filename;
                 bool result = VelodyneCapture::open(filename);
                 result &= VLP16Capture::isOpen();
                 this->frameNumber = 0;
+                if(result) this->moveToNext();
 
                 return result;
+            }
+            bool restart() {
+                if(this->isRun()) {
+                    this->close();
+                }
+                if(filename.compare("") == 0) {
+                    return false;
+                }
+                return this->open(filename);
             }
 
             void moveToNext() {
@@ -52,11 +65,22 @@ namespace velodyne {
                 this->frameNumber++;
             }
 
+            void moveToNext(const int n) {
+                for(int i = 0; i < n; i++) {
+                    this->moveToNext();
+                }
+            }
+
             void setOffset(const double &azimuth, const double &x, const double &y, const double &z) {
                 this->offsetAzimuth = azimuth;
                 this->offsetX = x;
                 this->offsetY = y;
                 this->offsetZ = z;
+            }
+
+            void setTransformMatrix(Eigen::Matrix4f &transformMatrix) {
+                this->transformMatrix = transformMatrix;
+                this->transform = true;
             }
 
             void operator >> (std::vector<Laser>& lasers) {
@@ -65,6 +89,7 @@ namespace velodyne {
 
             void operator >> (boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> &cloud) {
                 pcl::PointXYZ point;
+                Eigen::Vector4f p;
 
                 if(!cloud ) cloud.reset(new pcl::PointCloud<pcl::PointXYZ>());
 
@@ -76,6 +101,10 @@ namespace velodyne {
                     point.x = static_cast<float>( ( distance * std::cos( vertical ) ) * std::sin( azimuth ) );
                     point.y = static_cast<float>( ( distance * std::cos( vertical ) ) * std::cos( azimuth ) );
                     point.z = static_cast<float>( ( distance * std::sin( vertical ) ) );
+                    p(0) = static_cast<float>( ( distance * std::cos( vertical ) ) * std::sin( azimuth ) );
+                    p(1) = static_cast<float>( ( distance * std::cos( vertical ) ) * std::cos( azimuth ) );
+                    p(2) = static_cast<float>( ( distance * std::sin( vertical ) ) );
+                    p(3) = 1;
                 
                     if( point.x == 0.0f && point.y == 0.0f && point.z == 0.0f ){
                         continue;

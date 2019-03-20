@@ -82,7 +82,7 @@ namespace velodyne {
                 return isRun;
             }
 
-            boost::shared_ptr<PointCloudT>& getCloud() {
+            boost::shared_ptr<PointCloudT> getCloud() {
                 boost::shared_ptr<PointCloudT> cloud;
                 if(VLP16IsRun()) {
 					cloud.reset(new PointCloudT());
