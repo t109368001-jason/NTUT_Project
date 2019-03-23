@@ -803,6 +803,8 @@ namespace myFunction
 		octree.addPointsFromInputCloud ();
 		octree.getPointIndicesFromNewVoxels (newPointIdxVector);
 
+		std::sort(newPointIdxVector.begin(), newPointIdxVector.end());
+
 		int it1;
 		auto it2 = newPointIdxVector.begin();
 		for(it1 = 0, it2 = newPointIdxVector.begin(); it1 < cloud2->points.size() && it2 != newPointIdxVector.end(); it1++) 
@@ -817,6 +819,13 @@ namespace myFunction
 				it1--;
 			}
 		}
+		if(it2 == newPointIdxVector.end())
+		{
+			for(int i = it1; i < cloud2->points.size(); i++) {
+				temp->points.push_back(cloud2->points[i]);
+			}
+		}
+
 		temp->width = static_cast<uint32_t>(temp->points.size());
 		temp->height = 1;
 

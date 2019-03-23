@@ -138,35 +138,105 @@ int main(int argc, char * argv[])
         //grabber.toFolder(tmp_path.string());
         //grabber.start();
         std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> combineCloud;
+        std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> backCloud;
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp(new pcl::PointCloud<pcl::PointXYZ>());
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp1(new pcl::PointCloud<pcl::PointXYZ>());
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp(new pcl::PointCloud<pcl::PointXYZ>());
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp1(new pcl::PointCloud<pcl::PointXYZ>());
         
-        for(int i = 0; i<10; i++)
+        int total = 5000;
+        int compareFrameNumber = 10;
+        int times = 2;
+
+        for(int i = 0; i < (compareFrameNumber*times); i++)
         {
             combineCloud.push_back(grabber.getCloud());
+            grabber.nextFrame(total/compareFrameNumber/times);
         }
-
         std::cout<< combineCloud.size() << std::endl;
 
-        grabber.nextFrame(1000);
+        tt1.tic();
+        for(int j = 0; j < times; j++)
+        {
+            temp = combineCloud[j];
+            temp1 = combineCloud[j];
+            for(int i = (j + times); i < combineCloud.size(); i = i + times)
+            {
+                temp = myFunction::getNoChanges<pcl::PointXYZ>(temp, combineCloud[i], 0.1);
+                temp1 = myFunction::getNoChanges<pcl::PointXYZ>(combineCloud[i], temp1, 0.1);
+            }
 
+            combineTemp = myFunction::getNoChanges<pcl::PointXYZ>(temp, temp1, 0.1);
+            combineTemp1 = myFunction::getNoChanges<pcl::PointXYZ>(temp1, temp, 0.1);
+
+            *back = *combineTemp + *combineTemp1;
+            backCloud.push_back(back);
+        }
+
+        back = backCloud[0];
+        
+        for(int i = 1; i < backCloud.size(); i++)
+        {
+            back = myFunction::getNoChanges<pcl::PointXYZ>(back, backCloud[i], 0.1);
+        }
+
+        //back = backCloud[0];
+
+        tt1.toc_print_string();
+
+        std::cout<< back->points.size() << std::endl;
+
+
+
+/*//////////////////////////////////////////////////////////////////////////////////////////
+
+        back = grabber.getCloud();
+        grabber.nextFrame(total/n);
+
+        tt1.tic();
+
+        temp = myFunction::getNoChanges<pcl::PointXYZ>(back, grabber.getCloud(), 0.0001);
+        temp1 = myFunction::getNoChanges<pcl::PointXYZ>(grabber.getCloud(), back, 0.0001);
+        //temp1 = myFunction::getNoChanges<pcl::PointXYZ>(grabber.getCloud(), back, 0.0001);
+
+        *back = *temp1 + *temp;
+
+        //std::cout<< i << std::endl;
+        //std::cout<< back->points.size() * 100 / grabber.getCloud()->points.size() << "present\n";
+        grabber.nextFrame(total/n);
+
+        temp = myFunction::getNoChanges<pcl::PointXYZ>(back, grabber.getCloud(), 0.0001);
+        temp1 = myFunction::getNoChanges<pcl::PointXYZ>(grabber.getCloud(), back, 0.0001);
+        *back = *temp1 + *temp;
+        grabber.nextFrame(total/n);
+
+
+        
+        //std::cout<< temp->points.size() << std::endl << temp1->points.size() << std::endl;
+        //*back = *temp1 + *temp;
+        std::cout<< back->points.size() << std::endl;
+        tt1.toc_print_string();
+
+/*
         for(int i = 0; i < combineCloud.size(); i++)
         {
-            combineCloud[i] = myFunction::getNoChanges<pcl::PointXYZ>(combineCloud[i], grabber.getCloud(), 0.1);
+            combineCloud[i] = myFunction::getNoChanges<pcl::PointXYZ>(combineCloud[i], grabber.getCloud(), 1.0);
         }
 
         for(int i = 1; i < combineCloud.size(); i++)
         {
-            combineCloud[0] = myFunction::combineCloud<pcl::PointXYZ>(combineCloud[0], combineCloud[i]);
-            std::cout<< combineCloud[0]->size() / combineCloud[i]->size() * 100 << "present\n";
+            *combineCloud[0] += *combineCloud[i];
+            std::cout<< combineCloud[0]->points.size() / combineCloud[i]->points.size() * 100 << "present\n";
         }
 
         pcl::io::savePCDFileBinaryCompressed("back.pcd", *(combineCloud[0]));
-        
+ */       
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
-            myFunction::updateCloud<pcl::PointXYZ>(viewer, combineCloud[0], "combineCloud", 1.0, false, 0.0, 2000.0);
+            myFunction::updateCloud<pcl::PointXYZ>(viewer, back, "back", 1.0, false, 0.0, 2000.0);
         }
-
-        
+ 
+  /////////////////////////////////////////////////////////////////////////////////////////////////      
 
 
 /*
