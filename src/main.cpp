@@ -8,6 +8,7 @@
 //#include <pcl/io/vlp_grabber.h>
 #include "../3rdparty/args/args.hxx"
 #include "../include/microStopwatch.h"
+
 //#include "../include/velodyne/velodyne.h"
 //#include "../include/velodyne/velodyne_grabber.h"
 #include "../include/velodyne/pcap_cache.h"
@@ -192,7 +193,6 @@ uint64_t startTime;
 uint64_t startTime2;
 
 bool viewerPause = false;
-
 args::ArgumentParser parser("This is a test program.", "This goes after the options.");
 args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
 
@@ -201,7 +201,6 @@ args::Group requirementGroup(parser, "This group is all required:", args::Group:
     args::ValueFlag<std::string> inputPcapArg_2(requirementGroup, "inputPcap2", "input pcap2", {"p2"});
 args::Group optionalGroup(parser, "This group is all optional:", args::Group::Validators::DontCare);
     args::ValueFlag<std::string> backgroundPcdArg(optionalGroup, "backgroundPcd", "background pcd", {"bg"});
-    
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing);
 
 void mouseEventOccurred(const pcl::visualization::MouseEvent& event, void* nothing)
@@ -223,7 +222,6 @@ int main(int argc, char * argv[])
         parser.ParseCLI(argc, argv);
         
         myClass::MicroStopwatch tt1("pcap cache convert");
-        
         boost::filesystem::path pcapPath_1{args::get(inputPcapArg_1)};
         boost::filesystem::path pcapPath_2{args::get(inputPcapArg_2)};
         boost::filesystem::path backgroundPcdPath{args::get(backgroundPcdArg)};
@@ -236,7 +234,6 @@ int main(int argc, char * argv[])
         m->operator()(1,0) = 0.17952300f ;m->operator()(1,1) = 0.98350800f; m->operator()(1,2) = 0.02196290f; m->operator()(1,3) = -257.209f;
         m->operator()(2,0) = 0.00972594f ;m->operator()(2,1) = -0.0240989f; m->operator()(2,2) = 0.99966200f; m->operator()(2,3) = 56.53390f;
         m->operator()(3,0) = 0.00000000f ;m->operator()(3,1) = 0.00000000f; m->operator()(3,2) = 0.00000000f; m->operator()(3,3) = 1.000000f;
-
         viewer.reset(new pcl::visualization::PCLVisualizer( "Velodyne Viewer" ));
         viewer->registerKeyboardCallback(&keyboardEventOccurred, (void*) NULL);
         viewer->registerMouseCallback(&mouseEventOccurred, (void*) NULL);
