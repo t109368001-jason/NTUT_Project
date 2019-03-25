@@ -13,8 +13,8 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl/filters/statistical_outlier_removal.h>
-#include "../include/basic_function.h"
-#include "../include/date.h"
+#include "basic_function.h"
+#include "date.h"
 
 using namespace std;
 
@@ -139,12 +139,6 @@ namespace myFunction
 	double rotateZ(PointT &point, const double &angle)
 	{
 		rotateZ(point.x, point.y, point.z, angle);
-	}
-
-	bool fileExists(const std::string &filename)
-	{
-		struct stat buffer;
-		return (stat(filename.c_str(), &buffer) == 0);
 	}
 
 	pcl::PolygonMesh stl_to_mesh(std::string filename)

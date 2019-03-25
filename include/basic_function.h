@@ -4,11 +4,14 @@
 #include <iostream>
 #include <thread>
 #include <future>
+#include <sys/stat.h>
 #include "../include/date.h"
+#include "microStopwatch.h"
 #ifndef TIMEZONE
 #define TIMEZONE 8
 #endif
 namespace boost{namespace filesystem{
+
     boost::filesystem::path relative(boost::filesystem::path from, boost::filesystem::path to)
     {
     // Start at the root path and while they are the same then do nothing then when they first
@@ -44,6 +47,12 @@ namespace boost{namespace filesystem{
 
 namespace myFunction
 {
+	bool fileExists(const std::string &filename)
+	{
+		struct stat buffer;
+		return (stat(filename.c_str(), &buffer) == 0);
+	}
+
 	template<typename RandomIt1, typename RandomIt2, typename RandomIt3> 
     bool check_is_close(RandomIt1 a, RandomIt2 b, RandomIt3 tolerance) {
         return std::fabs(a - b) < tolerance;
@@ -100,53 +109,30 @@ namespace myFunction
         }
         return stream.str();
     }
-/*
-	template<typename RandomIt, typename PointT>
-	double getNearestPointsDistancePart(const int &division_num, typename pcl::search::KdTree<PointT>::Ptr tree, const RandomIt &beg, const RandomIt &end)
-	{
-		auto len = end - beg;
-
-		if(len < division_num)
-		{
-			double sqr_out = std::numeric_limits<double>::max();
-			for(auto it = beg; it != end; ++it)
-			{
-				std::vector<int> indices (2);
-				std::vector<float> sqr_distances (2);
-
-				tree->nearestKSearch(*it, 2, indices, sqr_distances);
-
-				if ((sqr_distances[1] < sqr_out)&&(sqr_distances[1] != 0.0)) sqr_out = sqr_distances[1];
-			}
-			return std::sqrt(sqr_out);
-		}
-		auto mid = beg + len/2;
-		auto handle = std::async(std::launch::async, getNearestPointsDistancePart<RandomIt, PointT>, division_num, tree, beg, mid);
-		auto out = getNearestPointsDistancePart<RandomIt, PointT>(division_num, tree, mid, end);
-		auto out1 = handle.get();
-
-		if(out1 < out) out = out1;
-
-		return out;
-	}
-*/
-    template<typename _R, typename _VType, typename _Fn, typename... _Args>
-    std::vector<_R>& multiThread(std::vector<_VType> &v, const int64_t multiNum, _Fn&& __fn, _Args&&... __args)
+    /*
+    template<typename _Result, typename _Vector, typename _Fn, typename _FnResult, typename Fn_O, typename... _Args>
+    _Result multiThread(std::vector<_Vector> &v, const int64_t multiNum, _Fn&& __fn, _Fn_O&& __fn_o, _Args&&... __args)
     {
-        int64_t d = v.size() / multiNum;    
+        int64_t d = std::ceil(v.size() / multiNum);    
         
-        std::vector<std::vector<_R>> vv;
+        std::vector<std::future<void>> threadVector;
+        std::vector<_FnResult> resultVector;
 
         for(int64_t i = 0; i < v.size(); i += d)
         {
             auto beg = v.begin() + i;
-            auto end = v.begin() + i + d;
+            auto end = v.begin() + ((i+d) > v.size() ? v.size() : (i+d));
             if(end > v.end()) end = v.end();
-            auto handle = std::async(std::launch::async, __fn, beg, end, __args...);
-            vv.push_back(handle);
-		    //std::vector<_R> out = handle.get();
+            std::future<_FnResult> handle = std::async(std::launch::async, __fn, beg, end, __args...);
+            threadVector.push_back(handle);
         }
-    }
 
+        for(auto thread : threadVector) {
+            resultVector.push_back(thread.get());
+        }
+
+        return __fn_o(resultVector);
+    }
+    */
 }
 #endif

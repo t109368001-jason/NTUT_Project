@@ -3,20 +3,22 @@
 
 #include "velodyne.h"
 #include <pcl-1.8/pcl/io/pcd_io.h>
+#include <pcl/registration/transforms.h>
 
 namespace velodyne {
 
-	typedef pcl::PointXYZ PointT;
-	typedef pcl::PointCloud<PointT> PointCloudT;
-	typedef boost::shared_ptr<PointCloudT> PointCloudPtrT;
-
     class VLP16Grabber {
+        typedef pcl::PointXYZ PointT;
+        typedef pcl::PointCloud<PointT> PointCloudT;
+        typedef boost::shared_ptr<PointCloudT> PointCloudPtrT;
+
         public:
         
             int64_t frameNumber;
             bool _pause;
             std::vector<boost::shared_ptr<VLP16>> vlp16s;
             std::vector<int> vlp16s_offsetFrameNum;
+            std::vector<Eigen::Matrix4f> vlp16s_transformMatrix;
             boost::function<void (const boost::shared_ptr<PointCloudT>& )> callback;
 
             boost::shared_ptr<std::thread> thread;
@@ -40,11 +42,13 @@ namespace velodyne {
                 this->add(filename.string());
             }
 
-            bool add(boost::shared_ptr<VLP16> &vlp16, const int &offsetFrameNum) {
+            bool add(boost::shared_ptr<VLP16> &vlp16, const int &offsetFrameNum, const Eigen::Matrix4f &transformMatrix = Eigen::Matrix4f::Identity()) {
                 for(int i = 0; i < offsetFrameNum; i++)
                     vlp16->moveToNext();
                 this->vlp16s.push_back(vlp16);
                 this->vlp16s_offsetFrameNum.push_back(offsetFrameNum);
+                transformMatrix.transpose();
+                this->vlp16s_transformMatrix.push_back(transformMatrix);
             }
 
             void registerCallback (const boost::function<void (const boost::shared_ptr<PointCloudT>& )> & callback) {
@@ -87,7 +91,13 @@ namespace velodyne {
                 if(VLP16IsRun()) {
 					cloud.reset(new PointCloudT());
                     for(int i = 0; i < vlp16s.size(); i++) {
-						(*vlp16s[i]) >> cloud;
+                        boost::shared_ptr<PointCloudT> temp1;
+                        boost::shared_ptr<PointCloudT> temp2;
+					    temp1.reset(new PointCloudT());
+					    temp2.reset(new PointCloudT());
+						(*vlp16s[i]) >> temp1;
+                        //pcl::transformPointCloud(*temp1, *temp2, vlp16s_transformMatrix[i]);
+                        *cloud += *temp1;
                     }
                 }
                 return cloud;
@@ -117,10 +127,8 @@ namespace velodyne {
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                         continue;
                     }
-					cloud.reset(new PointCloudT());
-                    for(int i = 0; i < vlp16s.size(); i++) {
-						(*vlp16s[i]) >> cloud;
-                    }
+                    
+                    cloud = this->getCloud();
 
 					this->callback(cloud);
                     this->nextFrame();
@@ -135,9 +143,8 @@ namespace velodyne {
                 while(VLP16IsRun()) {
 					cloud.reset(new PointCloudT());
 
-                    for(int i = 0; i < vlp16s.size(); i++) {
-						(*vlp16s[i]) >> cloud;
-                    }
+                    cloud = this->getCloud();
+
                     boost::filesystem::path p{tmpPath + "/" + std::to_string(frameNumber) + ".pcd"};
                     pcl::io::savePCDFileBinaryCompressed(p.string(), *cloud);
 					//this->callback(cloud);

@@ -8,12 +8,11 @@
 //#include <pcl/io/vlp_grabber.h>
 #include "../3rdparty/args/args.hxx"
 #include "../include/microStopwatch.h"
-//#include "../include/velodyne/velodyne.h"
-//#include "../include/velodyne/velodyne_grabber.h"
-#include "../include/velodyne/pcap_cache.h"
+#include "../include/velodyne/velodyne.h"
+#include "../include/velodyne/velodyne_grabber.h"
 #include "../include/function.h"
-//#include "../include/lasers.h"
-/*
+#include "../include/lasers.h"
+
 #include <pcl/point_representation.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
@@ -138,8 +137,8 @@ void pairAlign (const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt
   // Run the same optimization in a loop and visualize the results
   Eigen::Matrix4f Ti = Eigen::Matrix4f::Identity (), prev, targetToSource;
   PointCloudWithNormals::Ptr reg_result = points_with_normals_src;
-  reg.setMaximumIterations (2);
-  for (int i = 0; i < 50; ++i)
+  reg.setMaximumIterations (100);
+  for (int i = 0; i < 300; ++i)
   {
     PCL_INFO ("Iteration Nr. %d.\n", i);
 
@@ -180,18 +179,19 @@ void pairAlign (const PointCloud::Ptr cloud_src, const PointCloud::Ptr cloud_tgt
   
   final_transform = targetToSource;
  }
-*/
 
 std::mutex cloudMutex;
 boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> inputCloud_1;
 boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> inputCloud_2;
 
-//velodyne::VLP16Grabber grabber;
+velodyne::VLP16Grabber grabber;
 pcl::visualization::PCLVisualizer::Ptr viewer;
 uint64_t startTime;
 uint64_t startTime2;
 
 bool viewerPause = false;
+
+boost::filesystem::path tmp_path{"/tmp/LiDar"};
 
 args::ArgumentParser parser("This is a test program.", "This goes after the options.");
 args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
@@ -208,10 +208,10 @@ void mouseEventOccurred(const pcl::visualization::MouseEvent& event, void* nothi
 {
     if((event.getButton() == pcl::visualization::MouseEvent::MouseButton::LeftButton)||(event.getButton() == pcl::visualization::MouseEvent::MouseButton::MiddleButton)||(event.getButton() == pcl::visualization::MouseEvent::MouseButton::RightButton)) {
         if(event.getType() == pcl::visualization::MouseEvent::MouseButtonPress) {
-            /*system("xte \'mousedown 4\'");
+            system("xte \'mousedown 4\'");
             system("xte \'mouseup 4\'");
             system("xte \'mousedown 5\'");
-            system("xte \'mouseup 5\'");*/
+            system("xte \'mouseup 5\'");
         }
     }
 }
@@ -222,44 +222,108 @@ int main(int argc, char * argv[])
     {
         parser.ParseCLI(argc, argv);
         
-        myClass::MicroStopwatch tt1("pcap cache convert");
+        Eigen::Matrix4f m;
+        
+        myClass::MicroStopwatch tt1;
+        myClass::MicroStopwatch tt2;
+        myClass::MicroStopwatch tt3;
         
         boost::filesystem::path pcapPath_1{args::get(inputPcapArg_1)};
         boost::filesystem::path pcapPath_2{args::get(inputPcapArg_2)};
         boost::filesystem::path backgroundPcdPath{args::get(backgroundPcdArg)};
 
-        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        boost::shared_ptr<velodyne::VLP16> vlp16_1(new velodyne::VLP16);
+        boost::shared_ptr<velodyne::VLP16> vlp16_2(new velodyne::VLP16);
 
-        boost::shared_ptr<Eigen::Matrix4f> m(new Eigen::Matrix4f);
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combinedCloud;
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
 
-        m->operator()(0,0) = 0.98370500f ;m->operator()(0,1) = -0.1792490f; m->operator()(0,2) = -0.0138919f; m->operator()(0,3) = -1030.70f;
-        m->operator()(1,0) = 0.17952300f ;m->operator()(1,1) = 0.98350800f; m->operator()(1,2) = 0.02196290f; m->operator()(1,3) = -257.209f;
-        m->operator()(2,0) = 0.00972594f ;m->operator()(2,1) = -0.0240989f; m->operator()(2,2) = 0.99966200f; m->operator()(2,3) = 56.53390f;
-        m->operator()(3,0) = 0.00000000f ;m->operator()(3,1) = 0.00000000f; m->operator()(3,2) = 0.00000000f; m->operator()(3,3) = 1.000000f;
+        if(!myFunction::fileExists(tmp_path.string()))
+        {
+            mkdir(tmp_path.string().c_str(), 0777);
+        }
+
+        if(!vlp16_1->open(pcapPath_1.string()))
+        {
+            std::cout << std::endl << "Error : load " << pcapPath_1.string() << " failed" << std::endl;
+            return false;
+        }
+
+        if(!vlp16_2->open(pcapPath_2.string()))
+        {
+            std::cout << std::endl << "Error : load " << pcapPath_2.string() << " failed" << std::endl;
+            return false;
+        }
+
+        //vlp16_2->setOffset(-0.15708, -1044.3277129076, -94.3663384411, 37);
+
+        vlp16_2->setTransformMatrix();
 
         viewer.reset(new pcl::visualization::PCLVisualizer( "Velodyne Viewer" ));
         viewer->registerKeyboardCallback(&keyboardEventOccurred, (void*) NULL);
         viewer->registerMouseCallback(&mouseEventOccurred, (void*) NULL);
         viewer->addCoordinateSystem( 3.0, "coordinate" );
         viewer->setCameraPosition( 0.0, 0.0, 1000.0, 0.0, 1.0, 0.0, 0 );
-        
-        velodyne::PcapCache<pcl::PointXYZ> pcapCache("/tmp/pcapCache/");
-        if(!pcapCache.add(pcapPath_1.string())) return 0;
-        if(!pcapCache.add(pcapPath_2.string(), 2, m)) return 0;
-        tt1.tic();
-        if(!pcapCache.convert()) {
-          std::cout << "pcap cahce convert error" << std::endl;
-          return 0;
-        }
-        tt1.toc_print_string();
 
-        uint64_t displayFrameIndex = 0;
+        //boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> cloud_1(myFunction::XYZ_to_XYZRGB<pcl::PointXYZ>(inputCloud_1, false));
+        //boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> cloud_2(myFunction::XYZ_to_XYZRGB<pcl::PointXYZ>(inputCloud_2, false));
+        combinedCloud.reset(new pcl::PointCloud<pcl::PointXYZ>);
+        //combinedCloud = myFunction::combineCloud<pcl::PointXYZ>(inputCloud_1, inputCloud_2);
+
+
+        //myFunction::showCloud<pcl::PointXYZ>(viewer, combinedCloud, "combinedCloud", 1.0, false, 0.0, 2000.0);
+        //myFunction::showCloud(viewer, cloud_1, "cloud_1");
+        //myFunction::showCloud(viewer, cloud_2, "cloud_2");
+
+
+        if(backgroundPcdArg) {
+            pcl::io::loadPCDFile(backgroundPcdPath.string(), *back);
+        }
+
+        boost::mutex mutex;
+        boost::function<void( const boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& )> function =
+            [ &combinedCloud, &mutex ]( const boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& ptr ){
+                boost::mutex::scoped_lock lock( mutex );
+
+                combinedCloud = ptr;
+            };// VLP Grabber
+
+
+        grabber.add(vlp16_1, 0);
+        grabber.add(vlp16_2, 2);
+        grabber.registerCallback(function);
+        //grabber.toFolder(tmp_path.string());
+
+        vlp16_1->moveToNext(100);
+        *vlp16_1 >> inputCloud_1;
+        vlp16_2->moveToNext(100);
+        *vlp16_2 >> inputCloud_2;
+        Eigen::Matrix4f transformMatrix;
+        combinedCloud = myFunction::combineCloud<pcl::PointXYZ>(inputCloud_1, inputCloud_2);
+        myFunction::updateCloud<pcl::PointXYZ>(viewer, combinedCloud, "combinedCloud1", 1.0, true, 0.0, 2000.0);
+        pairAlign(inputCloud_1, inputCloud_2, combinedCloud, transformMatrix);
+        std::cout << transformMatrix << std::endl;
+        //[ 0.999926    -0.00503847 -0.0111259  -4.22016
+        //  0.0052693    0.99977     0.020816    5.87466
+        //  0.0110184   -0.020873    0.999721    19.8655
+        // -0           -0          -0           1       ]
+        //combinedCloud = myFunction::combineCloud<pcl::PointXYZ>(inputCloud_1, inputCloud_2);
+        myFunction::updateCloud<pcl::PointXYZ>(viewer, combinedCloud, "combinedCloud2", 1.0, false, 0.0, 2000.0);
+        
+        viewer->spin();
+
+        return 0;
+        
+        grabber.start();
+        
+        int i = 0;
+
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
-            cloud = pcapCache.get(displayFrameIndex);
-            myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 1.0, false, 0.0, 2000.0);
-            if(++displayFrameIndex >= pcapCache.totalFrame) {
-              displayFrameIndex=0;
+            boost::mutex::scoped_try_lock lock( mutex );
+            if( lock.owns_lock() && combinedCloud ){
+                myFunction::updateCloud<pcl::PointXYZ>(viewer, combinedCloud, "combinedCloud", 1.0, false, 0.0, 2000.0);
+
             }
         }
 
