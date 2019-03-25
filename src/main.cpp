@@ -193,6 +193,7 @@ uint64_t startTime;
 uint64_t startTime2;
 
 bool viewerPause = false;
+bool dynamicObject = false;
 args::ArgumentParser parser("This is a test program.", "This goes after the options.");
 args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
 
@@ -250,6 +251,75 @@ int main(int argc, char * argv[])
         }
         tt1.toc_print_string();
 
+
+        std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> combineCloud;
+        std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> backCloud;
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp(new pcl::PointCloud<pcl::PointXYZ>());
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp1(new pcl::PointCloud<pcl::PointXYZ>());
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp(new pcl::PointCloud<pcl::PointXYZ>());
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp1(new pcl::PointCloud<pcl::PointXYZ>());
+
+        int offsetFrame = 400;
+        int totalFrame = 5380 - offsetFrame;
+        int compareFrameNumber = 100;
+        int times = 4;
+
+
+        for(int i = 0; i < (compareFrameNumber*times); i++)
+        {
+            combineCloud.push_back(pcapCache.get(offsetFrame + i*totalFrame/compareFrameNumber/times));
+        }
+        std::cout<< combineCloud.size() << std::endl;
+
+        for(int j = 0; j < times; j++)
+        {
+            temp = combineCloud[j];
+            temp1 = combineCloud[j];
+            for(int i = (j + times); i < combineCloud.size(); i = i + times)
+            {
+                temp = myFunction::getNoChanges<pcl::PointXYZ>(temp, combineCloud[i], 0.1);
+                temp1 = myFunction::getNoChanges<pcl::PointXYZ>(combineCloud[i], temp1, 0.1);
+            }
+
+            combineTemp = myFunction::getNoChanges<pcl::PointXYZ>(temp, temp1, 0.1);
+            combineTemp1 = myFunction::getNoChanges<pcl::PointXYZ>(temp1, temp, 0.1);
+
+            *back = *combineTemp + *combineTemp1;
+            backCloud.push_back(back);
+        }
+
+        back = backCloud[0];
+
+        for(int i = 1; i < backCloud.size(); i++)
+        {
+            back = myFunction::getNoChanges<pcl::PointXYZ>(back, backCloud[i], 0.1);
+        }
+        
+        if(back->points.size() == 0) back = backCloud[0];
+
+        std::cout<< back->points.size() << std::endl;
+
+        uint64_t displayFrameIndex = 0;
+        while( !viewer->wasStopped() ){
+            viewer->spinOnce();
+            //cloud = back;
+            ///
+            if(dynamicObject == true)
+              cloud = myFunction::getChanges<pcl::PointXYZ>(back, combineCloud[displayFrameIndex], 50.0);
+            else 
+              cloud = combineCloud[displayFrameIndex];
+
+            if(++displayFrameIndex >= combineCloud.size()) {
+              displayFrameIndex = 0;
+            }
+
+            if(cloud->points.size() == 0) continue;
+            //*///
+            myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 1.0, false, 0.0, 2000.0);
+            
+        }
+/* 
         uint64_t displayFrameIndex = 0;
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
@@ -259,7 +329,7 @@ int main(int argc, char * argv[])
               displayFrameIndex=0;
             }
         }
-
+*/
         while(1);
     }
     catch (args::Help)
@@ -285,9 +355,9 @@ int main(int argc, char * argv[])
 
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing)
 {
-    if((event.getKeySym() == "Up")&&(event.keyDown()))
+    if((event.getKeySym() == "a")&&(event.keyDown()))
     {
-        
+        dynamicObject = !dynamicObject;
     }
     else 
     {
