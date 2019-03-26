@@ -1,7 +1,8 @@
 #include <mutex>
 #include <iostream>
 #include <pcl/visualization/pcl_visualizer.h>
-//#include <pcl/point_types.h>
+#include <pcl/point_types.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 //#include <pcl/kdtree/kdtree_flann.h>
 //#include <pcl/features/normal_3d.h>
 //#include <thread>
@@ -228,6 +229,7 @@ int main(int argc, char * argv[])
         boost::filesystem::path backgroundPcdPath{args::get(backgroundPcdArg)};
 
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> cloudFiltered(new pcl::PointCloud<pcl::PointXYZ>);
 
         boost::shared_ptr<Eigen::Matrix4f> m(new Eigen::Matrix4f);
 
@@ -259,6 +261,9 @@ int main(int argc, char * argv[])
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp1(new pcl::PointCloud<pcl::PointXYZ>());
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp(new pcl::PointCloud<pcl::PointXYZ>());
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp1(new pcl::PointCloud<pcl::PointXYZ>());
+        boost::shared_ptr<pcl::StatisticalOutlierRemoval<pcl::PointXYZ>> sor(new pcl::StatisticalOutlierRemoval<pcl::PointXYZ>());
+
+
 
         int offsetFrame = 400;
         int totalFrame = 5380 - offsetFrame;
@@ -301,12 +306,26 @@ int main(int argc, char * argv[])
         std::cout<< back->points.size() << std::endl;
 
         uint64_t displayFrameIndex = 0;
+        int meanKNumber = 1;
+        double stddevMulThreshNumber = 1.0;
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
             //cloud = back;
             ///
             if(dynamicObject == true)
-              cloud = myFunction::getChanges<pcl::PointXYZ>(back, combineCloud[displayFrameIndex], 50.0);
+            {
+              sor->setInputCloud (myFunction::getChanges<pcl::PointXYZ>(back, combineCloud[displayFrameIndex], 50.0));
+                  
+              if((event.getKeySym() == "1")&&(event.keyDown())){ meanKNumber++; std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; }
+              if((event.getKeySym() == "2")&&(event.keyDown())){ meanKNumber--; std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; }
+              if((event.getKeySym() == "3")&&(event.keyDown())){ stddevMulThreshNumber = stddevMulThreshNumber + 1.0; std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; }
+              if((event.getKeySym() == "4")&&(event.keyDown())){ stddevMulThreshNumber = stddevMulThreshNumber - 1.0; std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; }
+              sor->setMeanK (meanKNumber);
+              sor->setStddevMulThresh (stddevMulThreshNumber);
+              
+              sor->filter (*cloudFiltered);
+              cloud = cloudFiltered;
+            }
             else 
               cloud = combineCloud[displayFrameIndex];
 
