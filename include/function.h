@@ -925,8 +925,19 @@ namespace myFunction
 		}
 	}
 
+	void updateCloud(const boost::shared_ptr<pcl::visualization::PCLVisualizer> &viewer, const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud, const std::string name, const uint8_t r, const uint8_t g, const uint8_t b)
+	{
+		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> rgb(cloud, r, g, b);
+
+		if( !viewer->updatePointCloud<pcl::PointXYZ> (cloud, rgb, name))
+		{
+			viewer->addPointCloud<pcl::PointXYZ> (cloud, rgb, name);
+			viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1.0, name);
+		}
+	}
+
 	template<typename PointT>
-	void updateCloud(const boost::shared_ptr<pcl::visualization::PCLVisualizer> &viewer, const typename pcl::PointCloud<PointT>::Ptr &cloud, const std::string name, const double &size = 1.0, const bool gray = false, const double clip_lower = std::numeric_limits<double>::max(), const double clip_upper = std::numeric_limits<double>::min())
+	void updateCloud(const boost::shared_ptr<pcl::visualization::PCLVisualizer> &viewer, const typename pcl::PointCloud<PointT>::Ptr &cloud, const std::string name, const double &size = 1.0, const bool gray = false, const double clip_lower = std::numeric_limits<double>::min(), const double clip_upper = std::numeric_limits<double>::max())
 	{
 		auto cloud_rgb = XYZ_to_XYZRGB<PointT>(cloud, gray, clip_lower, clip_upper);
 		updateCloud(viewer, cloud_rgb, name, size);
