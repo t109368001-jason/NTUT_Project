@@ -4,7 +4,9 @@
 #define HAVE_BOOST
 #define HAVE_PCAP
 #define HAVE_FAST_PCAP
+#ifndef MAX_QUEUE_SIZE
 #define MAX_QUEUE_SIZE 100
+#endif
 
 #include <eigen3/Eigen/src/Core/Matrix.h>
 #include <pcl-1.8/pcl/registration/transforms.h>
@@ -37,7 +39,7 @@ namespace velodyne {
             bool converted;
 
             PcapCache() : outputPath("/tmp/pcapCache/"), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
-            PcapCache(std::string outputPath) : outputPath(outputPath), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+            PcapCache(std::string outputPath) : outputPath(outputPath + "/"), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
 
             bool add(const std::string &pcapFilename, const int64_t &frameOffset = 0, const boost::shared_ptr<Eigen::Matrix4f> &transformMatrixPtr = nullptr) {
                 boost::shared_ptr<VLP16<PointT>> file;
@@ -46,7 +48,6 @@ namespace velodyne {
                 file->pcapFilename = pcapFilename;
                 file->frameOffset = frameOffset;
 
-                this->files.push_back(file);
                 if(transformMatrixPtr) {
                     if(!file->vlp16.open(file->pcapFilename, *transformMatrixPtr))
                     {
@@ -66,13 +67,43 @@ namespace velodyne {
                     std::cout << std::endl << "Error : load " << file->pcapFilename << " failed" << std::endl;
                     return false;
                 }
+                std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
 
                 PointCloudPtrT cloud;
-
                 for(int64_t i = 0; i < file->frameOffset; i++) {
-                    file->vlp16 >> cloud;
+                    cloud.reset(new PointCloudT);
+                    file->vlp16.retrieve_block(cloud);
                 }
+                
+                this->files.push_back(file);
+                
                 return true;
+            }
+
+            bool add(const std::string &pcapFilename, const std::string &configFilename) {
+                boost::filesystem::path configPath{configFilename};
+                if(configFilename == "default") {
+                    configPath = pcapFilename;
+                    configPath.replace_extension("txt");
+                }
+
+                std::ifstream ifs(configPath.string());
+                int64_t frameOffset;
+                boost::shared_ptr<Eigen::Matrix4f> transformMatrixPtr;
+                transformMatrixPtr.reset(new Eigen::Matrix4f);
+
+                if(ifs.is_open()){
+                    std::string s;
+                    for(int i = 0; i < 4; i++) {
+                        for(int j = 0; j < 4; j++) {
+                            ifs >> s;
+                            (*transformMatrixPtr)(i,j) = std::stof(s);
+                        }
+                    }
+                    ifs >> s;
+                    frameOffset = std::stoll(s);
+                }
+                return this->add(pcapFilename, frameOffset, transformMatrixPtr);
             }
 
             bool filesIsRun() {
@@ -199,10 +230,6 @@ namespace velodyne {
             }
 
             bool convert() {
-                std::vector<boost::shared_ptr<VLP16Capture<PointT>>> vlp16s;
-
-                std::vector<PointCloudPtrT> clouds;
-
                 if(!myFunction::fileExists(outputPath.string()))
                 {
                     mkdir(outputPath.string().c_str(), 0777);
