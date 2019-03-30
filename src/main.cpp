@@ -66,7 +66,7 @@ int main(int argc, char * argv[])
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> cloud(new pcl::PointCloud<pcl::PointXYZ>);
         //PointCloudPtrT cloud(new PointCloudT);
         
-        velodyne::PcapCache<PointT> pcapCache;
+        velodyne::PcapCache<PointT> pcapCache("/home/user/Downloads/pcapcache");
 
         for(int i = 0; i < pcapPaths.size(); i++) {
             pcapCache.add(pcapPaths[i].string(), "default");
@@ -82,13 +82,12 @@ int main(int argc, char * argv[])
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
 
         int offsetFrame = 0;
-        int compareFrameNumber = 100;
-        int times = 4;        
+        int compareFrameNumber = 1000;
         uint64_t displayFrameIndex = 0;
         int meanKNumber = 50;
         double stddevMulThreshNumber = 1.0;
 
-        back = myFunction::getBackground<pcl::PointXYZ>(pcapCache, offsetFrame, compareFrameNumber, times);
+        back = myFunction::getBackground<pcl::PointXYZ>(pcapCache, offsetFrame, compareFrameNumber);
 
         while( !viewer->wasStopped() ){
 					viewer->spinOnce();
@@ -114,11 +113,11 @@ int main(int argc, char * argv[])
 									viewerStddevMulThreshDown = false;
 					}
 					*///
-					cloud = (dynamicObject == true)?myFunction::getDynamicStatisticalOutlierRemoval<pcl::PointXYZ>(
-									back, pcapCache.get(offsetFrame + displayFrameIndex*pcapCache.totalFrame/compareFrameNumber/times), 
-									meanKNumber, stddevMulThreshNumber):pcapCache.get(offsetFrame + displayFrameIndex*pcapCache.totalFrame/compareFrameNumber/times);
+					cloud = (dynamicObject == true) ? 
+									myFunction::getDynamicStatisticalOutlierRemoval<pcl::PointXYZ>(back, pcapCache.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber) : 
+									pcapCache.get(displayFrameIndex);
 
-					if(++displayFrameIndex >= (compareFrameNumber*times))displayFrameIndex = 0;
+					if(++displayFrameIndex >= pcapCache.totalFrame)displayFrameIndex = 0;
 
 					if(cloud->points.size() == 0) continue;
 					
