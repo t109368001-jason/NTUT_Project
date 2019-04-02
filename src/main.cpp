@@ -81,14 +81,28 @@ int main(int argc, char * argv[])
 
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
 
-        int offsetFrame = 0;
-        int compareFrameNumber = 1000;
+        int compareFrameNumber = 100;
+        double resolution = 10;
         uint64_t displayFrameIndex = 0;
         int meanKNumber = 50;
         double stddevMulThreshNumber = 1.0;
 
-        back = myFunction::getBackground<pcl::PointXYZ>(pcapCache, offsetFrame, compareFrameNumber);
+        back = myFunction::getBackground<pcl::PointXYZ>(pcapCache, compareFrameNumber, resolution);
 
+        velodyne::PcapCache<PointT> pcapCacheNoBack("/home/user/Downloads/pcapcache/noBack");
+        for(int i = 0; i < pcapPaths.size(); i++) {
+            pcapCacheNoBack.add(pcapPaths[i].string(), "default");
+        }    
+				pcapCacheNoBack.addBack(back, 50.0);
+        pcapCacheNoBack.convert();
+
+				int objectStopFrameRange = 100;
+				int objectNoChangesFramePoints = 1603;//1286~1920
+				boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> tempBeforeFiltered(new pcl::PointCloud<pcl::PointXYZ>());
+				boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> tempAFterFiltered(new pcl::PointCloud<pcl::PointXYZ>());
+				boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> tempNowFiltered(new pcl::PointCloud<pcl::PointXYZ>());
+
+				myFunction::updateCloud(viewer, back, "back", 255, 255, 255);
         while( !viewer->wasStopped() ){
 					viewer->spinOnce();
 					/*//
@@ -112,28 +126,34 @@ int main(int argc, char * argv[])
 									std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
 									viewerStddevMulThreshDown = false;
 					}
-					*///
+					
+
+					if((displayFrameIndex > objectStopFrameRange)&&(displayFrameIndex < (pcapCacheNoBack.totalFrame-objectStopFrameRange))){
+						tempBeforeFiltered = myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex - displayFrameIndex), meanKNumber, stddevMulThreshNumber);
+						tempAFterFiltered = myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex + displayFrameIndex), meanKNumber, stddevMulThreshNumber);
+						tempNowFiltered = myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber);
+						tempBeforeFiltered = myFunction::getNoChanges<pcl::PointXYZ>(tempBeforeFiltered, tempNowFiltered, 0.1);
+						tempAFterFiltered = myFunction::getNoChanges<pcl::PointXYZ>(tempNowFiltered, tempAFterFiltered, 0.1);
+					}
+
 					cloud = (dynamicObject == true) ? 
-									myFunction::getDynamicStatisticalOutlierRemoval<pcl::PointXYZ>(back, pcapCache.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber) : 
+									myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber) : 
 									pcapCache.get(displayFrameIndex);
 
-					if(++displayFrameIndex >= pcapCache.totalFrame)displayFrameIndex = 0;
-
 					if(cloud->points.size() == 0) continue;
-					
+
 					myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 1.0, false, 0.0, 2000.0);
-					
+
+					if((tempBeforeFiltered->points.size() <= objectNoChangesFramePoints)||(tempAFterFiltered->points.size() <= objectNoChangesFramePoints)){
+						myFunction::updateCloud(viewer, tempNowFiltered, "tempNowFiltered", 255, 255, 255);
+					}
+					else {
+						viewer->removePointCloud("tempNowFiltered");
+					}
+*///
+					if(++displayFrameIndex >= pcapCache.totalFrame)displayFrameIndex = 0;
         }
-/* 
-        int64_t currentCloudIdx = 0;
-        while( !viewer->wasStopped() ){
-            viewer->spinOnce();
-            cloud = pcapCache.get(currentCloudIdx);
-            myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 1.0, false, 0.0, 2000.0);
-            currentCloudIdx++;
-            if(currentCloudIdx >= pcapCache.totalFrame) currentCloudIdx = 0;
-        }
-*/
+
         while(1);
     }
     catch (args::Help)

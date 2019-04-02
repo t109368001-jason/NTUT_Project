@@ -12,6 +12,7 @@
 #include <pcl-1.8/pcl/registration/transforms.h>
 #include <pcl-1.8/pcl/io/pcd_io.h>
 #include "../basic_function.h"
+#include "../function.h"
 #include "../../3rdparty/VelodyneCapture/VelodyneCapture_cloud.h"
 
 
@@ -35,11 +36,19 @@ namespace velodyne {
             boost::filesystem::path outputPath;
             std::vector<boost::shared_ptr<VLP16<PointT>>> files;
             uint64_t beg, end, totalFrame;
+            PointCloudPtrT back;
+            double resolution;
+
 
             bool converted;
 
             PcapCache() : outputPath("/tmp/pcapCache/"), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
             PcapCache(std::string outputPath) : outputPath(outputPath + "/"), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+
+            void addBack(PointCloudPtrT back, double resolution) {
+                this->back = back;
+                this->resolution = resolution;
+            }
 
             bool add(const std::string &pcapFilename, const int64_t &frameOffset = 0, const boost::shared_ptr<Eigen::Matrix4f> &transformMatrixPtr = nullptr) {
                 boost::shared_ptr<VLP16<PointT>> file;
@@ -142,6 +151,7 @@ namespace velodyne {
                 ofs << "totalFrame="<< this->totalFrame << std::endl;
                 ofs << "beg="<< this->beg << std::endl;
                 ofs << "end="<< this->end << std::endl;
+                ofs << "back=" << "back.pcd" << std::endl;
                 for(auto file : files) {
                     ofs << "pcapFilename=" << file->pcapFilename << std::endl;
                     ofs << "frameOffset=" << file->frameOffset << std::endl;
@@ -159,6 +169,7 @@ namespace velodyne {
                 ss << "totalFrame="<< this->totalFrame << std::endl;
                 ss << "beg="<< this->beg << std::endl;
                 ss << "end="<< this->end << std::endl;
+                ss << "back=" << "back.pcd" << std::endl;
                 for(auto file : files) {
                     ss << "pcapFilename=" << file->pcapFilename << std::endl;
                     ss << "frameOffset=" << file->frameOffset << std::endl;
@@ -249,7 +260,10 @@ namespace velodyne {
                     [ ] ( const std::string &file_name, const PointCloudT &cloud){
                         pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, cloud);
                     };
-                    
+                
+                if(back) {
+                    pcl::io::savePCDFileBinaryCompressed<PointT>(outputPath.string() + "/back.pcd", *back);
+                }
                 std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
                 while(filesIsRun()&&(totalFrame < end)) {
                     
@@ -261,6 +275,7 @@ namespace velodyne {
                         PointCloudPtrT cloud;
                         while((cloud ? cloud->points.size() == 0 : true)) {
                             cloud = getCloudFromCapture();
+                            if(back) cloud = myFunction::getChanges<pcl::PointXYZ>(back, cloud, 50.0);
                         }
                         if(thread)
                         {
