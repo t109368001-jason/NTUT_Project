@@ -24,6 +24,14 @@ foreach(file
 
 endforeach(file)
 
+if (UNIX AND NOT APPLE)
+    execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE ld_version)
+    if ("${ld_version}" MATCHES "GNU gold")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=gold -Wl,--disable-new-dtags")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold -Wl,--disable-new-dtags")
+    endif()
+endif()
+
 #設定變數
 set(PROJECT_NAME pcl_viewer)
 set(SOURCE_FILE src/main.cpp)
@@ -56,9 +64,6 @@ include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-find_package( OpenCV )
-#include_directories( ${OpenCV_INCLUDE_DIRS} )
-
 include(FindPCAP.cmake)
 #include(FindZipIos.cmake)
 
@@ -68,11 +73,9 @@ set( CMAKE_CXX_STANDARD_REQUIRED )
 set( CMAKE_CXX_EXTENSIONS OFF )
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILE})          #設定執行檔名稱及對應程式碼
-if(OpenCV_LIBS)
-    target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${PCAP_LIBRARY} ) #連結函式庫
-else()
-    target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES} ${PCAP_LIBRARY} ) #連結函式庫
-endif()
+
+target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES} ${PCAP_LIBRARY} ) #連結函式庫
+
 
 if(BUILD_EXAMPLE)   #設定其他範例執行檔
     add_executable(pcd_viewer ${CMAKE_BINARY_DIR}/../src/pcd_viewer.cpp)

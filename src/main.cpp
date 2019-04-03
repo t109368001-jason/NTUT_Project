@@ -81,8 +81,8 @@ int main(int argc, char * argv[])
 
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
 
-        int compareFrameNumber = 100;
-        double resolution = 10;
+        int compareFrameNumber = 1000;
+        double resolution = 10.0;
         uint64_t displayFrameIndex = 0;
         int meanKNumber = 50;
         double stddevMulThreshNumber = 1.0;
@@ -90,68 +90,62 @@ int main(int argc, char * argv[])
         back = myFunction::getBackground<pcl::PointXYZ>(pcapCache, compareFrameNumber, resolution);
 
         velodyne::PcapCache<PointT> pcapCacheNoBack("/home/user/Downloads/pcapcache/noBack");
+
         for(int i = 0; i < pcapPaths.size(); i++) {
             pcapCacheNoBack.add(pcapPaths[i].string(), "default");
         }    
-				pcapCacheNoBack.addBack(back, 50.0);
+		pcapCacheNoBack.addBack(back, resolution);
         pcapCacheNoBack.convert();
 
-				int objectStopFrameRange = 100;
-				int objectNoChangesFramePoints = 1603;//1286~1920
-				boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> tempBeforeFiltered(new pcl::PointCloud<pcl::PointXYZ>());
-				boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> tempAFterFiltered(new pcl::PointCloud<pcl::PointXYZ>());
-				boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> tempNowFiltered(new pcl::PointCloud<pcl::PointXYZ>());
+        int objectStopFrameRange = 100;
+        std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> nochangeFrameNumber;
 
-				myFunction::updateCloud(viewer, back, "back", 255, 255, 255);
+        //nochangeFrameNumber = myFunction::nochangeFrameIndex<pcl::PointXYZ>(pcapCacheNoBack, objectStopFrameRange, objectNoChangesFramePoints, objectNoChangesFramePoints2, resolution, meanKNumber, stddevMulThreshNumber);
+        
+        std::cout << "Complete nochangeFrameNumber!" << std::endl;
+
+		//myFunction::updateCloud(viewer, back, "back", 255, 255, 255);
         while( !viewer->wasStopped() ){
-					viewer->spinOnce();
-					/*//
-					if(viewerMeanKUp == true){ 
-									meanKNumber++; 
-									std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
-									viewerMeanKUp = false;
-											}
-					if(viewerMeanKDown == true){ 
-									meanKNumber--; 
-									std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
-									viewerMeanKDown = false;
-					}
-					if(viewerStddevMulThreshUp == true){ 
-									stddevMulThreshNumber++; 
-									std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
-									viewerStddevMulThreshUp = false;
-					}
-					if(viewerStddevMulThreshDown == true){ 
-									stddevMulThreshNumber--; 
-									std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
-									viewerStddevMulThreshDown = false;
-					}
-					
+            viewer->spinOnce();
+            /*
+            if(viewerMeanKUp == true){ 
+                            meanKNumber++; 
+                            std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
+                            viewerMeanKUp = false;
+                                    }
+            if(viewerMeanKDown == true){ 
+                            meanKNumber--; 
+                            std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
+                            viewerMeanKDown = false;
+            }
+            if(viewerStddevMulThreshUp == true){ 
+                            stddevMulThreshNumber++; 
+                            std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
+                            viewerStddevMulThreshUp = false;
+            }
+            if(viewerStddevMulThreshDown == true){ 
+                            stddevMulThreshNumber--; 
+                            std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
+                            viewerStddevMulThreshDown = false;
+            }
+            */
+/*
+            cloud = (dynamicObject == true) ? 
+                myFunction::getChanges<pcl::PointXYZ>(nochangeFrameNumber[displayFrameIndex], myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber), resolution) : 
+                pcapCache.get(displayFrameIndex);
+*/
+            cloud = (dynamicObject == true) ? 
+                pcapCacheNoBack.get(displayFrameIndex) : 
+                pcapCache.get(displayFrameIndex);
 
-					if((displayFrameIndex > objectStopFrameRange)&&(displayFrameIndex < (pcapCacheNoBack.totalFrame-objectStopFrameRange))){
-						tempBeforeFiltered = myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex - displayFrameIndex), meanKNumber, stddevMulThreshNumber);
-						tempAFterFiltered = myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex + displayFrameIndex), meanKNumber, stddevMulThreshNumber);
-						tempNowFiltered = myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber);
-						tempBeforeFiltered = myFunction::getNoChanges<pcl::PointXYZ>(tempBeforeFiltered, tempNowFiltered, 0.1);
-						tempAFterFiltered = myFunction::getNoChanges<pcl::PointXYZ>(tempNowFiltered, tempAFterFiltered, 0.1);
-					}
+            
 
-					cloud = (dynamicObject == true) ? 
-									myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber) : 
-									pcapCache.get(displayFrameIndex);
+            if(cloud->points.size() == 0) continue;
 
-					if(cloud->points.size() == 0) continue;
+            myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 1.0, false, 0.0, 2000.0);
+            //myFunction::updateCloud(viewer, nochangeFrameNumber[displayFrameIndex], "tempNowFiltered", 255, 255, 255);
 
-					myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 1.0, false, 0.0, 2000.0);
-
-					if((tempBeforeFiltered->points.size() <= objectNoChangesFramePoints)||(tempAFterFiltered->points.size() <= objectNoChangesFramePoints)){
-						myFunction::updateCloud(viewer, tempNowFiltered, "tempNowFiltered", 255, 255, 255);
-					}
-					else {
-						viewer->removePointCloud("tempNowFiltered");
-					}
-*///
-					if(++displayFrameIndex >= pcapCache.totalFrame)displayFrameIndex = 0;
+            if(++displayFrameIndex >= pcapCache.totalFrame)displayFrameIndex = 0;
         }
 
         while(1);

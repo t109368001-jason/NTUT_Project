@@ -139,7 +139,7 @@ namespace velodyne {
                 return cloud;
             }
 
-            PointCloudPtrT get(int64_t index) {
+            PointCloudPtrT get(int index) {
                 PointCloudPtrT cloud(new PointCloudT);
                 pcl::io::loadPCDFile<PointT>(outputPath.string() + std::to_string(index) + ".pcd", *cloud);
                 return cloud;
@@ -256,18 +256,23 @@ namespace velodyne {
                 }
                 totalFrame += beg;
 
-                boost::function<void( const std::string &file_name, const PointCloudT &cloud )> function =
-                    [ ] ( const std::string &file_name, const PointCloudT &cloud){
-                        pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, cloud);
+                PointCloudPtrT tmp = this->back;
+                double resolutionTmp = this->resolution;
+
+                boost::function<void( const std::string &file_name, PointCloudPtrT &cloud )> function =
+                    [&tmp, &resolutionTmp] ( const std::string &file_name, PointCloudPtrT &cloud){
+                        if(tmp) cloud = myFunction::getChanges<pcl::PointXYZ>(tmp, cloud, resolutionTmp);
+                        pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, *cloud);
                     };
                 
                 if(back) {
                     pcl::io::savePCDFileBinaryCompressed<PointT>(outputPath.string() + "/back.pcd", *back);
                 }
+                
                 std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
                 while(filesIsRun()&&(totalFrame < end)) {
                     
-                    for(auto thread : ts) {
+                    for(auto &thread : ts) {
                         
                         if((!filesIsRun())||(totalFrame >= end)) {
                             break;
@@ -275,7 +280,6 @@ namespace velodyne {
                         PointCloudPtrT cloud;
                         while((cloud ? cloud->points.size() == 0 : true)) {
                             cloud = getCloudFromCapture();
-                            if(back) cloud = myFunction::getChanges<pcl::PointXYZ>(back, cloud, 50.0);
                         }
                         if(thread)
                         {
@@ -284,17 +288,17 @@ namespace velodyne {
                                 thread->~thread();
                                 delete thread;
                                 thread = nullptr;
-                                thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", *cloud));
+                                thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", cloud));
                             }
                         } else {
-                            thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", *cloud));
+                            thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", cloud));
                         }
                         std::cout << totalFrame << "\033[5G" << std::flush;
                         totalFrame++;
                     }
                 }
                 std::cout << std::endl << "Complete! total: " << totalFrame << " frame" << std::endl;
-                for(auto thread : ts) {
+                for(auto &thread : ts) {
                     if(thread) {
                         while( !thread->joinable() );
                         thread->join();
