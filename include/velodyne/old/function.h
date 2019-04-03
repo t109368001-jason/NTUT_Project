@@ -13,8 +13,7 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <pcl/filters/statistical_outlier_removal.h>
-#include "basic_function.h"
-#include "date.h"
+#include <include/basic_function.h>
 
 using namespace std;
 
@@ -1181,6 +1180,5 @@ namespace myFunction
 		sor.filter (*temp);
 		return temp;
 	}
-
 }
 #endif

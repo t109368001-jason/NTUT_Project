@@ -15,8 +15,7 @@
 #include <pcl/registration/icp.h>
 #include <pcl/registration/icp_nl.h>
 #include <pcl/registration/transforms.h>
-#include "pcap_cache.h"
-#include "../../3rdparty/VelodyneCapture/VelodyneCapture_cloud.h"
+#include <include/pcap_cache.h>
 
 namespace velodyne {
 
@@ -26,7 +25,7 @@ namespace velodyne {
         typedef boost::shared_ptr<PointCloudT> PointCloudPtrT;
         public:
             int64_t currentCloudIdx;
-            PcapCache<PointT> cache;
+            PcapCache cache;
             Eigen::Matrix4f transformMatrix;
             std::stack<Eigen::Matrix4f> transformMatrixPre;
             PointCloudPtrT showCloud;
@@ -69,9 +68,9 @@ namespace velodyne {
 
             int currentItemIdx;
             std::vector<MergeItem> items;
-            boost::shared_ptr<boost::mutex> mutex;
+            boost::shared_ptr<std::mutex> mutex;
 
-            MergeTool(boost::mutex &mutex): mutex(&mutex) { };
+            MergeTool(std::mutex &mutex): mutex(&mutex) { };
 
             void add(std::string filename, PointCloudPtrT &cloud) {
                 boost::filesystem::path p{filename};
