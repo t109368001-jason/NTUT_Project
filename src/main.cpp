@@ -1,29 +1,30 @@
+#define DEBUG_INFO
+
 #include <iostream>
-#include <qapplication.h>
-
-#include <3rdparty/args/args.hxx>
-#include <include/microStopwatch.h>
-#include <include/velodyne/gui.h>
-
+#include <QApplication>
+#include <args/args.hxx>
+#include <microStopwatch.hpp>
+#include <velodyne/gui.h>
 args::ArgumentParser parser("This is a test program.", "This goes after the options.");
 args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
 
 int main(int argc, char * argv[])
 {
+    myClass::MicroStopwatch tt1("initial velodyne gui");
+    
+    QApplication app (argc, argv);
+    tt1.tic(true);
+    velodyne::GUI v;
+    tt1.toc();
+    
+    v.show();
+
+    return app.exec();
+/*
     try
     {
         parser.ParseCLI(argc, argv);
         
-        myClass::MicroStopwatch tt1("initial velodyne gui");
-        
-        QApplication app (argc, argv);
-        tt1.tic(true);
-        velodyne::GUI v;
-        tt1.toc();
-        
-        v.show();
-
-        return app.exec();
     }
     catch (args::Help)
     {
@@ -42,6 +43,5 @@ int main(int argc, char * argv[])
         parser.Help(std::cout);
         return 1;
     }
-
-    return 0;
+*/
 }

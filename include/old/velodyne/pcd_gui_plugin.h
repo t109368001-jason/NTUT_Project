@@ -21,7 +21,7 @@
 #include <QDialog>
 #include <QWizard>
 #include <QObject>
-#include <include/basic_function.h>
+#include <basic_function.hpp>
 namespace velodyne {
     class PCDGUIPlugin : public QWidget {
     public:

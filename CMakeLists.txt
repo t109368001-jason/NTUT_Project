@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
 #避免建置路徑與程式碼路徑相同
 if(" ${CMAKE_SOURCE_DIR}" STREQUAL " ${CMAKE_BINARY_DIR}")
@@ -10,7 +10,13 @@ endif()
 
 set(PROJECT_NAME pcl_viewer)
 
-project(${PROJECT_NAME})
+add_definitions(-std=c++17)   #boost需要17版以上
+set( CMAKE_CXX_STANDARD 17 )
+set( CMAKE_CXX_STANDARD_REQUIRED )
+set( CMAKE_CXX_EXTENSIONS OFF )
+
+set(CMAKE_AUTOMOC ON)
+#set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 if (UNIX AND NOT APPLE)
     execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE ld_version)
@@ -31,8 +37,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
     "Output directory for applications"
     )
 
-include(cotire)
+project(${PROJECT_NAME})
 
+#include_directories(${CMAKE_SOURCE_DIR}/velodyne/include)
+#add_subdirectory(velodyne)
+#set(LIBS ${LIBS} PcapMediaWidget)
+
+#add_library(PcapMediaWidget STATIC IMPORTED)
+#set_property(TARGET PcapMediaWidget PROPERTY IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/lib/libPcapMediaWidget.a)
 if(NOT PCL_FOUND)
     find_package(PCL 1.8 REQUIRED)  #尋找PCL函式庫
 endif()
@@ -63,15 +75,29 @@ endif()
 include(FindPCAP)
 set(LIBS ${LIBS} ${PCAP_LIBRARY})
 set(LIBS ${LIBS} Qt5::Widgets)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty)
 
-add_definitions(-std=c++17)   #boost需要17版以上
-set( CMAKE_CXX_STANDARD 17 )
-set( CMAKE_CXX_STANDARD_REQUIRED )
-set( CMAKE_CXX_EXTENSIONS OFF )
+file(GLOB srcs
+src/*.cpp
+src/*/*.cpp
+)
 
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
+#foreach (file ${srcs})
+    #string(REGEX REPLACE "\\.[^.]*$" "" name_without_extension ${file})
+    #file(RELATIVE_PATH name_without_extension ${CMAKE_SOURCE_DIR}/src ${name_without_extension})
+    #get_filename_component (LIBRARY_NAME ${name_without_extension} NAME_WE)
+    #if(EXISTS "${CMAKE_SOURCE_DIR}/include/${name_without_extension}.hpp")
+        #message(${name_without_extension})
+        #add_library(${LIBRARY_NAME} SHARED src/${name_without_extension}.cpp include/${name_without_extension}.hpp)
+        #set(LIBS ${LIBS} ${LIBRARY_NAME})
+    #elseif(EXISTS "${CMAKE_SOURCE_DIR}/include/${name_without_extension}.h")
+        #message(${name_without_extension})
+        #add_library(${LIBRARY_NAME} SHARED src/${name_without_extension}.cpp include/${name_without_extension}.h)
+        #set(LIBS ${LIBS} ${LIBRARY_NAME})
+    #endif()
+#endforeach ()
 
-add_executable(${PROJECT_NAME} src/main.cpp)          #設定執行檔名稱及對應程式碼
+add_executable(${PROJECT_NAME} src/main.cpp ${srcs})          #設定執行檔名稱及對應程式碼
 target_link_libraries(${PROJECT_NAME} ${LIBS})
 #cotire(${PROJECT_NAME})

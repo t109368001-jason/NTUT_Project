@@ -15,7 +15,7 @@
 #include <pcl/registration/icp.h>
 #include <pcl/registration/icp_nl.h>
 #include <pcl/registration/transforms.h>
-#include <include/pcap_cache.h>
+#include <velodyne/pcap_cache.h>
 
 namespace velodyne {
 

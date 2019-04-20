@@ -10,13 +10,13 @@
 #include <vector>
 #include <pcl/point_cloud.h>
 #include <Eigen/src/Core/Matrix.h>
-#include "../basic_function.h"
+#include <basic_function.h>
 #if defined(MAX_QUEUE_SIZE) && defined(VELODYNE_CAPTURE_USE_CLOUD)
-#include "../../3rdparty/VelodyneCapture/VelodyneCapture_cloud.h"
+#include <VelodyneCapture/VelodyneCapture_cloud.h>
 #elif defined(MAX_QUEUE_SIZE)
-#include "../../3rdparty/VelodyneCapture/VelodyneCapture_modified.h"
+#include <VelodyneCapture/VelodyneCapture_modified.h>
 #else
-#include "../../3rdparty/VelodyneCapture/VelodyneCapture.h"
+#include <VelodyneCapture/VelodyneCapture.h>
 #endif
 
 namespace velodyne {

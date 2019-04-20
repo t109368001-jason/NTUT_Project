@@ -21,13 +21,11 @@
 #include <QDialog>
 #include <QWizard>
 #include <QObject>
-#include <include/basic_function.h>
-#include <include/velodyne/merge_tool.h>
+#include <basic_function.hpp>
+#include <velodyne/merge_tool.h>
 namespace velodyne {
     class MergeToolGUIPlugin : public QWidget {
     public:
-        QMainWindow *parent;
-
         QAction *open;
         
         QToolBar *mediaToolBar;
@@ -45,10 +43,10 @@ namespace velodyne {
         MergeTool *mergeTool;
         std::vector<PointCloudPtrT> clouds;
 
-        MergeToolGUIPlugin(QMainWindow *parent = nullptr) : QWidget(parent), parent(parent), currentCloudIdx(0), viewerPause(true) { }
+        MergeToolGUIPlugin(QMainWindow *parent = nullptr) : QWidget(parent), currentCloudIdx(0), viewerPause(true) { }
 
         void set() {
-                QStringList filenames = QFileDialog::getOpenFileNames(parent,
+                QStringList filenames = QFileDialog::getOpenFileNames(this,
                             "Select one or more files to open",
                             QDir::currentPath(),
                             "pcap files (*.pcap)" );
@@ -72,14 +70,14 @@ namespace velodyne {
 
                     viewerTimer = new QTimer(this);
                     connect(viewerTimer, &QTimer::timeout, this, &MergeToolGUIPlugin::run);
-                    viewerTimer->start(std::chrono::milliseconds(100));
+                    viewerTimer->start(100);
                 }
         }
 
         void run() {
             for(int i = 0; i < clouds.size(); i++) {
                 uint8_t r, g, b;
-                myFunction::valueToRGB(r, g, b, float(i)/float(clouds.size()));
+                myFunction::valueToRGB(r, g, b, float(i)/float(clouds.size()-1));
                 myFunction::updateCloud(viewer, clouds[i], "cloud" + std::to_string(i), r, g, b);
             }
         }

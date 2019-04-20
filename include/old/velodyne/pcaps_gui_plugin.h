@@ -21,7 +21,7 @@
 #include <QDialog>
 #include <QWizard>
 #include <QObject>
-#include <include/basic_function.h>
+#include <basic_function.hpp>
 namespace velodyne {
     class PcapsGUIPlugin : public QWidget {
     public:
@@ -44,7 +44,10 @@ namespace velodyne {
         PcapCache *pcapCache;
         PointCloudPtrT cloud;
 
-        PcapsGUIPlugin(QMainWindow *parent = nullptr) : QWidget(parent), parent(parent), currentCloudIdx(0), viewerPause(true) { }
+        std::vector<pcl::PointXYZ> pickedPoints;
+        int pickCount;
+
+        PcapsGUIPlugin(QMainWindow *parent = nullptr) : QWidget(parent), parent(parent), currentCloudIdx(0), viewerPause(true), pickedPoints(2), pickCount(0) { }
 
         int setCurrentCloudIdx_blocking(int currentCloudIdx, QWidget* obj = nullptr) {
             while(setCurrentCloudIdx(currentCloudIdx, obj) != 0);
@@ -59,9 +62,7 @@ namespace velodyne {
                     viewerMutex.unlock();
                     this->currentCloudIdx = currentCloudIdx;
                     bool sliderOldState = slider->blockSignals(true);
-                    std::cout << "AAAA" << std::endl;
                     if(obj != slider) slider->setValue(currentCloudIdx);
-                    std::cout << "BBBB" << std::endl;
                     slider->blockSignals(sliderOldState);
                 } else {
                     result = 2;
@@ -110,12 +111,13 @@ namespace velodyne {
                     viewer->registerAreaPickingCallback(&PcapsGUIPlugin::areaPickingEventOccurred, *this);
                     viewer->addCoordinateSystem( 3.0, "coordinate" );
                     viewer->setCameraPosition( 0.0, 0.0, 4000.0, 0.0, 1.0, 0.0, 0 );
+                    
                     initialMediaToolBar();
 
                     setCurrentCloudIdx(0);
                     viewerTimer = new QTimer(this);
                     connect(viewerTimer, &QTimer::timeout, this, &PcapsGUIPlugin::run);
-                    viewerTimer->start(std::chrono::milliseconds(100));
+                    viewerTimer->start(100);
                 }
         }
 
@@ -146,11 +148,19 @@ namespace velodyne {
         }
 
         void pointPickingEventOccurred(const pcl::visualization::PointPickingEvent& event, void* nothing) {
+            pcl::PointXYZ point;
 
+            event.getPoint(point.x, point.y, point.z);
+
+            pickedPoints[pickCount] = point;
+            
+            std::cout << "Picked : " << pickedPoints[pickCount];
+            pickCount = (pickCount + 1) % 2;
+            std::cout << ", distance between last" << pickedPoints[pickCount] <<  " is " << myFunction::distance(pickedPoints[0], pickedPoints[1]) << std::endl;
         }
 
         void areaPickingEventOccurred(const pcl::visualization::AreaPickingEvent& event, void* nothing) {
-
+            
         }
 
         void initialMediaToolBar() {
