@@ -1,3 +1,4 @@
+
 #define DEBUG_INFO
 
 #include <iostream>
@@ -5,6 +6,8 @@
 #include <args/args.hxx>
 #include <microStopwatch.hpp>
 #include <velodyne/gui.hpp>
+bool dynamicObject = false;
+
 args::ArgumentParser parser("This is a test program.", "This goes after the options.");
 args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
 
@@ -24,7 +27,6 @@ int main(int argc, char * argv[])
     try
     {
         parser.ParseCLI(argc, argv);
-        
     }
     catch (args::Help)
     {
