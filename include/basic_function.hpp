@@ -5,15 +5,14 @@
 #include <future>
 #include <sys/stat.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <microStopwatch.hpp>
 
 #include <date.h>
 #ifndef TIMEZONE
 #define TIMEZONE 8
 #endif
 
-typedef pcl::PointXYZ PointT;
-typedef pcl::PointCloud<PointT> PointCloudT;
-typedef boost::shared_ptr<PointCloudT> PointCloudPtrT;
+typedef boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> PointCloudPtrT;
 typedef boost::shared_ptr<pcl::visualization::PCLVisualizer> ViewerPtrT;
 
 namespace boost{namespace filesystem{
@@ -24,6 +23,70 @@ namespace boost{namespace filesystem{
 namespace myFunction
 {
 	bool fileExists(const std::string &filename);
+
+	template<typename RandomIt1, typename RandomIt2, typename RandomIt3> 
+    bool check_is_close(RandomIt1 a, RandomIt2 b, RandomIt3 tolerance);
+
+	template<typename Type>
+	std::string commaFix(const Type &input);
+
+    template<typename RandomIt>
+    std::string durationToString(const RandomIt &duration, const bool isFileName);
+
+	void valueToRGB(uint8_t &r, uint8_t &g, uint8_t &b, float value);
+
+	void valueToRGB(uint32_t &rgb, float value);
+
+    std::vector<float> getNormVector(const PointCloudPtrT &cloud);
+
+    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> XYZ_to_XYZRGB(const PointCloudPtrT &cloud, const float maxRange);
+
+    void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const uint8_t &r = 255, const uint8_t &g = 255, const uint8_t &b = 255);
+
+    void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const double maxRange);
+}
+
+namespace boost{namespace filesystem{
+
+    boost::filesystem::path relative(boost::filesystem::path from, boost::filesystem::path to)
+    {
+    // Start at the root path and while they are the same then do nothing then when they first
+    // diverge take the entire from path, swap it with '..' segments, and then append the remainder of the to path.
+    boost::filesystem::path::const_iterator fromIter = from.begin();
+    boost::filesystem::path::const_iterator toIter = to.begin();
+
+    // Loop through both while they are the same to find nearest common directory
+    while (fromIter != from.end() && toIter != to.end() && (*toIter) == (*fromIter))
+    {
+        ++toIter;
+        ++fromIter;
+    }
+
+    // Replace from path segments with '..' (from => nearest common directory)
+    boost::filesystem::path finalPath;
+    while (fromIter != from.end())
+    {
+        finalPath /= "..";
+        ++fromIter;
+    }
+
+    // Append the remainder of the to path (nearest common directory => to)
+    while (toIter != to.end())
+    {
+        finalPath /= *toIter;
+        ++toIter;
+    }
+
+    return finalPath;
+    }
+}}
+
+namespace myFunction
+{
+	bool fileExists(const std::string &filename) {
+		struct stat buffer;
+		return (stat(filename.c_str(), &buffer) == 0);
+	}
 
 	template<typename RandomIt1, typename RandomIt2, typename RandomIt3> 
     bool check_is_close(RandomIt1 a, RandomIt2 b, RandomIt3 tolerance) {
@@ -76,79 +139,93 @@ namespace myFunction
         return stream.str();
     }
 
-    float distance(const pcl::PointXYZ &point1, const pcl::PointXYZ &point2);
+	void valueToRGB(uint8_t &r, uint8_t &g, uint8_t &b, float value) {
+        value *= 1280.0;
+        value += 128.0;
+        if(value >= 0 && value < 256) {
+			r = 0;
+			g = 0;
+			b = value;
+        } else if(value >= 256 && value < 512) {
+			r = 0;
+			g = value - 255;
+			b = 255;
+        } else if(value >= 512 && value < 768) {
+			r = 0;
+			g = 255;
+			b = 767-value;
+        } else if(value >= 768 && value < 1024) {
+			r = value - 767;
+			g = 255;
+			b = 0;
+        } else if(value >= 1024 && value < 1280) {
+			r = 255;
+			g = 1279-value;
+			b = 0;
+        } else {
+			r = 1535-value;
+			g = 0;
+			b = 0;
+        }
+	}
 
-    template<typename IterItemT>
-    std::vector<float> getPointCloudRange(const int splitCount, const IterItemT &beg, const IterItemT &end) {
-		auto len = end - beg;
+	void valueToRGB(uint32_t &rgb, float value) {
+        uint8_t r, g, b;
+        valueToRGB(r, g, b, value);
+        rgb = (static_cast<uint32_t>(r) << 16 | static_cast<uint32_t>(g) << 8 | static_cast<uint32_t>(b));
+	}
 
-		if(splitCount == 0)
-		{
-            std::vector<float> range(2);
-            range[0] = std::numeric_limits<float>::max();
-            range[1] = std::numeric_limits<float>::min();
-			for(auto it = beg; it != end; ++it)
-			{
-                range[0] = std::fmin(range[0], std::sqrt((*it).x*(*it).x+(*it).y*(*it).y+(*it).z*(*it).z));
-                range[1] = std::fmax(range[1], std::sqrt((*it).x*(*it).x+(*it).y*(*it).y+(*it).z*(*it).z));
-			}
-			return range;
-		}
-		auto mid = beg + len/2;
-		auto handle = std::async(std::launch::async, getPointCloudRange<IterItemT>, splitCount-1, beg, mid);
-		auto range = getPointCloudRange<IterItemT>(splitCount-1, mid, end);
-		auto range1 = handle.get();
-
-        range[0] = std::fmin(range[0], range1[0]);
-        range[1] = std::fmax(range[1], range1[1]);
-
-		return range;
+    std::vector<float> getNormVector(const PointCloudPtrT &cloud) {
+        std::vector<float> normVector(cloud->points.size());
+        std::transform(cloud->points.begin(), cloud->points.end(), normVector.begin(), [](auto &p){return std::sqrt(p.x*p.x+p.y*p.y+p.z*p.z);});
+        return normVector;
     }
 
-	void valueToRGB(uint8_t &r, uint8_t &g, uint8_t &b, const float &value);
+    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> XYZ_to_XYZRGB(const PointCloudPtrT &cloud, const float maxRange) {
+        float min, max;
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> cloud_rgb(new pcl::PointCloud<pcl::PointXYZRGB>);
 
-	void valueToRGB(uint32_t &rgb, const float &value);
+        auto normVector = getNormVector(cloud);
+        auto minmax = std::minmax_element(normVector.begin(), normVector.end());
+        min = *minmax.first;
+        max = std::fmin(*minmax.second, maxRange);
 
-    template<typename IterItemT>
-    std::vector<pcl::PointXYZRGB, Eigen::aligned_allocator<pcl::PointXYZRGB>> XYZ_to_XYZRGBPart(const int splitCount, const IterItemT &beg, const IterItemT &end, const std::vector<float> &range) {
-		auto len = end - beg;
-
-		if(splitCount == 0)
-		{
-            std::vector<pcl::PointXYZRGB, Eigen::aligned_allocator<pcl::PointXYZRGB>> points;
-            float div = range[1] - range[0];
-			for(auto it = beg; it != end; ++it)
-			{
-                pcl::PointXYZRGB point;
-                uint32_t rgb;
-                point.x = (*it).x;
-                point.y = (*it).y;
-                point.z = (*it).z;
-                float d = std::fmin(range[1], std::sqrt(point.x*point.x+point.y*point.y+point.z*point.z));
-                float v = float(d-range[0]) / div;
-                v = std::fmin(v, 1.0);
-
-                valueToRGB(rgb, v);
-                point.rgb = *reinterpret_cast<float*>(&rgb);
-                points.push_back(point);
-			}
-			return points;
-		}
-		auto mid = beg + len/2;
-		auto handle = std::async(std::launch::async, XYZ_to_XYZRGBPart<IterItemT>, splitCount-1, beg, mid, range);
-		auto points = XYZ_to_XYZRGBPart<IterItemT>(splitCount-1, mid, end, range);
-		auto points1 = handle.get();
-
-        std::copy(points1.begin(), points1.end(), std::back_insert_iterator(points));
-
-		return points;
+        pcl::copyPointCloud(*cloud, *cloud_rgb);
+        
+        float div = max - min;
+        auto point = cloud_rgb->points.begin();
+        auto norm = normVector.begin();
+        for(; point != cloud_rgb->points.end(); ++point, ++norm) {
+            uint32_t rgb;
+            float v = std::fmin(float((*norm)-min) / div, 1.0);
+            valueToRGB(rgb, v);
+            (*point).rgb = *reinterpret_cast<float*>(&rgb);
+        }
+        
+		return cloud_rgb;
     }
 
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> XYZ_to_XYZRGB(const PointCloudPtrT &cloud, const float maxRange);
+    void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const uint8_t &r, const uint8_t &g, const uint8_t &b) {
 
-    void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const uint8_t &r = 255, const uint8_t &g = 255, const uint8_t &b = 255);
+		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> rgb(cloud, r, g, b);
 
-    void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const double maxRange);
+		if( !viewer->updatePointCloud<pcl::PointXYZ> (cloud, rgb, name))
+		{
+			viewer->addPointCloud<pcl::PointXYZ> (cloud, rgb, name);
+		}
+    }
+
+    void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const double maxRange) {
+
+        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> cloud_rgb;
+        cloud_rgb = XYZ_to_XYZRGB(cloud, maxRange);
+
+		pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(cloud_rgb);
+
+		if( !viewer->updatePointCloud<pcl::PointXYZRGB> (cloud_rgb, rgb, name))
+		{
+			viewer->addPointCloud<pcl::PointXYZRGB> (cloud_rgb, rgb, name);
+		}
+    }
 }
-
 #endif

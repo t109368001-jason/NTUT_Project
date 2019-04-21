@@ -10,11 +10,6 @@ endif()
 
 set(PROJECT_NAME pcl_viewer)
 
-add_definitions(-std=c++17)   #boost需要17版以上
-set( CMAKE_CXX_STANDARD 17 )
-set( CMAKE_CXX_STANDARD_REQUIRED )
-set( CMAKE_CXX_EXTENSIONS OFF )
-
 set(CMAKE_AUTOMOC ON)
 #set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -78,26 +73,11 @@ set(LIBS ${LIBS} Qt5::Widgets)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty)
 
-file(GLOB srcs
-src/*.cpp
-src/*/*.cpp
-)
+add_definitions(-std=c++17)   #boost需要17版以上
+set( CMAKE_CXX_STANDARD 17 )
+set( CMAKE_CXX_STANDARD_REQUIRED )
+set( CMAKE_CXX_EXTENSIONS OFF )
 
-#foreach (file ${srcs})
-    #string(REGEX REPLACE "\\.[^.]*$" "" name_without_extension ${file})
-    #file(RELATIVE_PATH name_without_extension ${CMAKE_SOURCE_DIR}/src ${name_without_extension})
-    #get_filename_component (LIBRARY_NAME ${name_without_extension} NAME_WE)
-    #if(EXISTS "${CMAKE_SOURCE_DIR}/include/${name_without_extension}.hpp")
-        #message(${name_without_extension})
-        #add_library(${LIBRARY_NAME} SHARED src/${name_without_extension}.cpp include/${name_without_extension}.hpp)
-        #set(LIBS ${LIBS} ${LIBRARY_NAME})
-    #elseif(EXISTS "${CMAKE_SOURCE_DIR}/include/${name_without_extension}.h")
-        #message(${name_without_extension})
-        #add_library(${LIBRARY_NAME} SHARED src/${name_without_extension}.cpp include/${name_without_extension}.h)
-        #set(LIBS ${LIBS} ${LIBRARY_NAME})
-    #endif()
-#endforeach ()
-
-add_executable(${PROJECT_NAME} src/main.cpp ${srcs})          #設定執行檔名稱及對應程式碼
+add_executable(${PROJECT_NAME} src/main.cpp)          #設定執行檔名稱及對應程式碼
 target_link_libraries(${PROJECT_NAME} ${LIBS})
 #cotire(${PROJECT_NAME})

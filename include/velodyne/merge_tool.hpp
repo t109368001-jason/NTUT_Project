@@ -15,7 +15,7 @@
 #include <pcl/registration/icp.h>
 #include <pcl/registration/icp_nl.h>
 #include <pcl/registration/transforms.h>
-#include <velodyne/pcap_cache.h>
+#include <velodyne/pcap_cache.hpp>
 
 namespace velodyne {
 
@@ -215,7 +215,7 @@ namespace velodyne {
                     }
                     return;
                 } else if((event.getKeySym() == "i")&&(event.keyDown())) {
-                    std::cout << "input file index as source:";
+                    std::cout << "input file index as source(current: " << currentItemIdx << "):";
                     int sourceIdx;
                     cin >> sourceIdx;
                     matrix = easyICP(items[sourceIdx].showCloud, items[currentItemIdx].showCloud, 2, 50);

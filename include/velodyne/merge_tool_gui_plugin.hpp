@@ -22,7 +22,7 @@
 #include <QWizard>
 #include <QObject>
 #include <basic_function.hpp>
-#include <velodyne/merge_tool.h>
+#include <velodyne/merge_tool.hpp>
 namespace velodyne {
     class MergeToolGUIPlugin : public QWidget {
     public:

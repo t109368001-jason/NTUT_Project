@@ -189,7 +189,7 @@ namespace velodyne
             const bool open( const std::string& filename, const Eigen::Matrix4f &transformMatrix )
             {
                 this->transformMatrixPtr = new Eigen::Matrix4f(transformMatrix);
-                open(filename);
+                return open(filename);
             };
             const bool open( const std::string& filename )
             {
@@ -203,6 +203,7 @@ namespace velodyne
                 pcap_t* pcap = pcap_open_offline( filename.c_str(), error );
                 if( !pcap ){
                     throw std::runtime_error( error );
+                    std::cout << "AAAA" << std::endl;
                     return false;
                 }
 
@@ -211,11 +212,13 @@ namespace velodyne
                 std::ostringstream oss;
                 if( pcap_compile( pcap, &filter, oss.str().c_str(), 0, 0xffffffff ) == -1 ){
                     throw std::runtime_error( pcap_geterr( pcap ) );
+                    std::cout << "BBBB" << std::endl;
                     return false;
                 }
 
                 if( pcap_setfilter( pcap, &filter ) == -1 ){
                     throw std::runtime_error( pcap_geterr( pcap ) );
+                    std::cout << "CCCC" << std::endl;
                     return false;
                 }
 
@@ -604,23 +607,25 @@ namespace velodyne
                             laser.time = unixtime;
                             #endif
 
+                            // Update Last Rotation Azimuth
+                            last_azimuth = azimuth;
+                            /*if( (p.x == 0.0f) && (p.y == 0.0f) && (p.z == 0.0f) ){
+                                continue;
+                            }*/
+
                             PointT p1,p2;
                             p1.x = static_cast<float>( ( laser.distance * std::cos( laser.vertical * M_PI / 180.0 ) ) * std::sin( laser.azimuth  * M_PI / 180.0 ) );
                             p1.y = static_cast<float>( ( laser.distance * std::cos( laser.vertical * M_PI / 180.0 ) ) * std::cos( laser.azimuth  * M_PI / 180.0 ) );
                             p1.z = static_cast<float>( ( laser.distance * std::sin( laser.vertical * M_PI / 180.0 ) ) );
                         
+                            if( p1.x == 0.0f && p1.y == 0.0f && p1.z == 0.0f ) continue;
+
                             if(transformMatrixPtr) {
                                 p2.x = static_cast<float>( matrix[0][0] * p1.x + matrix[0][1] * p1.y + matrix[0][2] * p1.z + matrix[0][3] );
                                 p2.y = static_cast<float>( matrix[1][0] * p1.x + matrix[1][1] * p1.y + matrix[1][2] * p1.z + matrix[1][3] );
                                 p2.z = static_cast<float>( matrix[2][0] * p1.x + matrix[2][1] * p1.y + matrix[2][2] * p1.z + matrix[2][3] );
                                 p1 = p2;
                             }
-
-                            // Update Last Rotation Azimuth
-                            last_azimuth = azimuth;
-                            /*if( (p.x == 0.0f) && (p.y == 0.0f) && (p.z == 0.0f) ){
-                                continue;
-                            }*/
 
                             cloud->points.push_back( p1 );
                         }
