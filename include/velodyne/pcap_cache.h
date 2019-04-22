@@ -14,10 +14,10 @@
 #include "../basic_function.h"
 #include "../function.h"
 #include "../../3rdparty/VelodyneCapture/VelodyneCapture_cloud.h"
+#include "../backgroundSegmentation.h"
 
 
 namespace velodyne {
-
 
     template<typename PointT>
     class VLP16 {
@@ -30,23 +30,27 @@ namespace velodyne {
 
     template<typename PointT>
     class PcapCache {
-            typedef pcl::PointCloud<PointT> PointCloudT;
-            typedef boost::shared_ptr<PointCloudT> PointCloudPtrT;
+        typedef pcl::PointCloud<PointT> PointCloudT;
+        typedef boost::shared_ptr<PointCloudT> PointCloudPtrT;
+
         public:
             boost::filesystem::path outputPath;
             std::vector<boost::shared_ptr<VLP16<PointT>>> files;
             uint64_t beg, end, totalFrame;
             PointCloudPtrT back;
+            int backNumber;
+            int compareFrameNumber;
             double resolution;
 
 
             bool converted;
 
-            PcapCache() : outputPath("/tmp/pcapCache/"), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
-            PcapCache(std::string outputPath) : outputPath(outputPath + "/"), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+            PcapCache() : outputPath("/tmp/pcapCache/"), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+            PcapCache(std::string outputPath) : outputPath(outputPath + "/"), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
 
-            void addBack(PointCloudPtrT back, double resolution) {
-                this->back = back;
+            void addBack(int backNumber, int compareFrameNumber,  double resolution) {
+                this->backNumber = backNumber;
+                this->compareFrameNumber = compareFrameNumber;
                 this->resolution = resolution;
             }
 
@@ -151,7 +155,7 @@ namespace velodyne {
                 ofs << "totalFrame="<< this->totalFrame << std::endl;
                 ofs << "beg="<< this->beg << std::endl;
                 ofs << "end="<< this->end << std::endl;
-                ofs << "back=" << "back.pcd" << std::endl;
+                ofs << "back=" << (back ? "back_" + std::to_string(this->backNumber) + ".pcd" : "") << std::endl;
                 for(auto file : files) {
                     ofs << "pcapFilename=" << file->pcapFilename << std::endl;
                     ofs << "frameOffset=" << file->frameOffset << std::endl;
@@ -169,7 +173,8 @@ namespace velodyne {
                 ss << "totalFrame="<< this->totalFrame << std::endl;
                 ss << "beg="<< this->beg << std::endl;
                 ss << "end="<< this->end << std::endl;
-                ss << "back=" << "back.pcd" << std::endl;
+                ss << "back=" << (this->backNumber != 0 ? "back_" + std::to_string(this->backNumber) + ".pcd" : "") << std::endl;
+
                 for(auto file : files) {
                     ss << "pcapFilename=" << file->pcapFilename << std::endl;
                     ss << "frameOffset=" << file->frameOffset << std::endl;
@@ -212,6 +217,10 @@ namespace velodyne {
                 boost::split(sv2, s2, boost::is_any_of("\n"));
                 int i = 1;
                 while(i < sv1.size() || i < sv2.size()) {
+                    if((i == 3)&&(this->backNumber == 0)) {
+                        i++;
+                        continue;
+                    }
                     if(i < sv1.size() && i < sv2.size()) {
                         if(sv1[i] != sv2[i]) {
                             return false;
@@ -256,18 +265,10 @@ namespace velodyne {
                 }
                 totalFrame += beg;
 
-                PointCloudPtrT tmp = this->back;
-                double resolutionTmp = this->resolution;
-
                 boost::function<void( const std::string &file_name, PointCloudPtrT &cloud )> function =
-                    [&tmp, &resolutionTmp] ( const std::string &file_name, PointCloudPtrT &cloud){
-                        if(tmp) cloud = myFunction::getChanges<pcl::PointXYZ>(tmp, cloud, resolutionTmp);
+                    [] ( const std::string &file_name, PointCloudPtrT &cloud){
                         pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, *cloud);
                     };
-                
-                if(back) {
-                    pcl::io::savePCDFileBinaryCompressed<PointT>(outputPath.string() + "/back.pcd", *back);
-                }
                 
                 std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
                 while(filesIsRun()&&(totalFrame < end)) {
@@ -307,9 +308,128 @@ namespace velodyne {
                         thread = nullptr;
                     }
                 }
+
+                if(this->backNumber > 0)
+                {
+                    getBackground();
+                    pcl::io::savePCDFileBinaryCompressed<PointT>(outputPath.string() + "/back" + std::to_string(this->backNumber) + ".pcd", *back);
+
+                    boost::function<void(const std::string file_name, const int begin, const int ended)> function =
+                    [this] (const std::string file_name, const int begin, const int ended){
+                            myClass::backgroundSegmentation<PointT> b;                            
+                            b.setBackground(this->back, 1.0);
+
+                        for(int k = begin; k <= ended; k++){
+                            if(k >= this->totalFrame)break;
+
+                            boost::shared_ptr<pcl::PointCloud<PointT>> temp(new pcl::PointCloud<PointT>);
+                            pcl::io::loadPCDFile<PointT>( file_name + std::to_string(k) + ".pcd", *temp);
+
+                            temp = b.compute(temp);
+                            pcl::io::savePCDFileBinaryCompressed<PointT>(file_name + std::to_string(k) + ".pcd", *temp);
+                            std::cout << k << "\033[5G" << std::flush;
+                        }
+                    };
+
+                    for(int j = 0; j<ts.size(); j++){
+                        int begin = j*this->totalFrame/ts.size();
+                        int ended = begin+this->totalFrame/ts.size();
+
+                        ts[j] = new std::thread(std::bind(function, outputPath.string(), begin, ended));
+                    }
+
+                    for(int j = 0; j < ts.size(); j++) {
+                        if(ts[j]) {
+                            while( !ts[j]->joinable() );
+                            ts[j]->join();
+                            ts[j]->~thread();
+                            delete ts[j];
+                            ts[j] = nullptr;
+                        }
+                    }
+                }
+
                 saveConfig();
                 converted = true;
                 return true;
+            }
+
+            boost::shared_ptr<pcl::PointCloud<PointT>> getBack() {
+                if(!back)back.reset(new pcl::PointCloud<PointT>());
+                pcl::io::loadPCDFile<PointT>(outputPath.string() + "/back" + std::to_string(this->backNumber) + ".pcd", *back);
+                return back;
+            }
+
+            void getBackground ()
+            {
+                std::vector<std::thread *> ts(std::thread::hardware_concurrency() + 1);
+                boost::shared_ptr<pcl::PointCloud<PointT>> back(new pcl::PointCloud<PointT>());
+                std::vector<boost::shared_ptr<pcl::PointCloud<PointT>>> backs(ts.size());
+
+                int d = this->totalFrame/this->compareFrameNumber/2*2;
+                int jump = this->compareFrameNumber/2;
+
+                boost::function<void(int i, int j)> function = 
+                [&backs, &jump, &d, this] ( int i, int j) {
+                    boost::shared_ptr<pcl::PointCloud<PointT>> temp(new pcl::PointCloud<PointT>());
+                    boost::shared_ptr<pcl::PointCloud<PointT>> temp1(new pcl::PointCloud<PointT>());
+                    temp = myFunction::getNoChanges<PointT>(this->get(i), this->get(i+(jump*d)), this->resolution);
+                    temp1 = myFunction::getNoChanges<PointT>(this->get(i+(jump*d)), this->get(i), this->resolution);
+                    temp = myFunction::getChanges<PointT>(backs[j], temp, 1.0);
+                    temp1 = myFunction::getChanges<PointT>(backs[j], temp1, 1.0);
+                    *backs[j] += *temp;
+                    *backs[j] += *temp1;
+                };
+                
+                for(auto &cloud : backs) {
+                    cloud.reset(new pcl::PointCloud<PointT>());
+                }
+
+                int i = 0;
+                while(i < int(this->totalFrame/2)){
+                    bool skip = false;
+
+                    for(int j = 0; j<ts.size(); j++){
+                        if(i >= int(this->totalFrame/2)) { skip = true; break; }
+
+                        if(ts[j])
+                        {
+                            if( ts[j]->joinable() ){
+                                ts[j]->join();
+                                ts[j]->~thread();
+                                delete ts[j];
+                                ts[j] = nullptr;
+
+                                ts[j] = new std::thread(std::bind(function, i, j));     
+                                i += d;
+                            }
+                        } 
+                        else{
+                            ts[j] = new std::thread(std::bind(function, i, j));       
+                            i += d;
+                        }
+                    }
+                    if(skip) break;
+                }
+
+                for(int j = 0; j < ts.size(); j++) {
+                    if(ts[j]) {
+                        while( !ts[j]->joinable() );
+                        ts[j]->join();
+                        ts[j]->~thread();
+                        delete ts[j];
+                        ts[j] = nullptr;
+                    }
+                }
+
+                for(auto cloud : backs) {
+                    if(back->points.size() > this->backNumber) break;
+                    cloud = myFunction::getChanges<PointT>(back, cloud, 1.0);
+                    *back += *cloud;
+                    std::cout << " back size= " << back->points.size() << std::endl;
+                }
+
+                this->back = back;
             }
     };
 }

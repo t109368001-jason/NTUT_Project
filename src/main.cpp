@@ -11,7 +11,6 @@
 #include "../include/microStopwatch.h"
 #include "../include/velodyne/pcap_cache.h"
 #include "../include/function.h"
-#include "../include/backgroundAndDynamic.h"
 
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> PointCloudT;
@@ -27,6 +26,7 @@ bool viewerStddevMulThreshUp = false;
 bool viewerStddevMulThreshDown = false;
 
 bool dynamicObject = false;
+bool onlyBackground = false;
 args::ArgumentParser parser("This is a test program.", "This goes after the options.");
 args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
 
@@ -72,29 +72,27 @@ int main(int argc, char * argv[])
             pcapCache.add(pcapPaths[i].string(), "default");
         }    
         pcapCache.convert();
-
+        
         viewer.reset(new pcl::visualization::PCLVisualizer( "Velodyne Viewer" ));
         viewer->registerKeyboardCallback(keyboardEventOccurred, (void*) NULL);
         viewer->registerMouseCallback(&mouseEventOccurred, (void*) NULL);
         viewer->addCoordinateSystem( 3.0, "coordinate" );
         viewer->setCameraPosition( 0.0, 0.0, 1000.0, 0.0, 1.0, 0.0, 0 );
 
-        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
-
-        int compareFrameNumber = 1000;
+        int compareFrameNumber = 100;
         double resolution = 10.0;
+        int backNumber = 1000000;
+        
         uint64_t displayFrameIndex = 0;
         int meanKNumber = 50;
         double stddevMulThreshNumber = 1.0;
-
-        back = myFunction::getBackground<pcl::PointXYZ>(pcapCache, compareFrameNumber, resolution);
 
         velodyne::PcapCache<PointT> pcapCacheNoBack("/home/user/Downloads/pcapcache/noBack");
 
         for(int i = 0; i < pcapPaths.size(); i++) {
             pcapCacheNoBack.add(pcapPaths[i].string(), "default");
         }    
-		pcapCacheNoBack.addBack(back, resolution);
+		pcapCacheNoBack.addBack(backNumber, compareFrameNumber, resolution);
         pcapCacheNoBack.convert();
 
         int objectStopFrameRange = 100;
@@ -104,31 +102,8 @@ int main(int argc, char * argv[])
         
         std::cout << "Complete nochangeFrameNumber!" << std::endl;
 
-		//myFunction::updateCloud(viewer, back, "back", 255, 255, 255);
         while( !viewer->wasStopped() ){
             viewer->spinOnce();
-            /*
-            if(viewerMeanKUp == true){ 
-                            meanKNumber++; 
-                            std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
-                            viewerMeanKUp = false;
-                                    }
-            if(viewerMeanKDown == true){ 
-                            meanKNumber--; 
-                            std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
-                            viewerMeanKDown = false;
-            }
-            if(viewerStddevMulThreshUp == true){ 
-                            stddevMulThreshNumber++; 
-                            std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
-                            viewerStddevMulThreshUp = false;
-            }
-            if(viewerStddevMulThreshDown == true){ 
-                            stddevMulThreshNumber--; 
-                            std::cout<< "meanKNumber=" << meanKNumber << "  stddevMulThreshNumber=" << stddevMulThreshNumber << endl; 
-                            viewerStddevMulThreshDown = false;
-            }
-            */
 /*
             cloud = (dynamicObject == true) ? 
                 myFunction::getChanges<pcl::PointXYZ>(nochangeFrameNumber[displayFrameIndex], myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber), resolution) : 
@@ -138,11 +113,14 @@ int main(int argc, char * argv[])
                 pcapCacheNoBack.get(displayFrameIndex) : 
                 pcapCache.get(displayFrameIndex);
 
-            
+            cloud = (onlyBackground == true) ? pcapCacheNoBack.getBack() : cloud;
 
             if(cloud->points.size() == 0) continue;
 
-            myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 1.0, false, 0.0, 2000.0);
+            if(onlyBackground == true)
+                myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 255, 255, 255);
+            else 
+                myFunction::updateCloud<pcl::PointXYZ>(viewer, cloud, "cloud", 1.0, false, 0.0, 2000.0);
             //myFunction::updateCloud(viewer, nochangeFrameNumber[displayFrameIndex], "tempNowFiltered", 255, 255, 255);
 
             if(++displayFrameIndex >= pcapCache.totalFrame)displayFrameIndex = 0;
@@ -192,6 +170,9 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void*
     else if((event.getKeySym() == "space")&&(event.keyDown()))
     {
         viewerPause = !viewerPause;
+    }else if((event.getKeySym() == "s")&&(event.keyDown()))
+    {
+        onlyBackground = !onlyBackground;
     }
     else 
     {
