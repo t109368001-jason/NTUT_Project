@@ -19,17 +19,23 @@ namespace velodyne {
 
     class GUIPCLViewer : public QWidget {
     public:
-        ViewerPtrT viewer;
+        myClass::MicroStopwatch tt1;
+        myClass::MicroStopwatch tt2;
+        myClass::MicroStopwatch tt3;
+        myClass::MicroStopwatch tt4;
+        myClass::MicroStopwatch tt5;
 
+        ViewerPtrT viewer;
         QTimer *timer;
         QHBoxLayout *hLayout;
+        QWidget *vLayoutWidget;
         QFormLayout *vLayout;
         QVTKWidget *qvtk;
 
         std::vector<GUIPCLViewerItem*> items;
 
-        std::string pickedPointsItemName;
-        bool removePickPoint;
+        int pickPointsCount;
+        std::vector<std::string> pickedPointsItemNames;
 
         GUIPCLViewer(QWidget *parent);
         
@@ -37,6 +43,8 @@ namespace velodyne {
         GUIPCLViewerItem * addItem(std::string name, _ItemT &item);
 
         void refresh();
+
+        void deleteItem(std::string deleteName);
 
         void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing);
         
@@ -63,10 +71,10 @@ namespace velodyne {
 }
 
 using namespace velodyne;
-GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), removePickPoint(false), pickedPointsItemName("picked points") {
-    QWidget *vLayoutWidget = new QWidget(this);
+GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), pickPointsCount(0), tt1("refresh"), tt2("refresh get"), tt3("refresh show") {
+    vLayoutWidget = new QWidget(this);
     hLayout = new QHBoxLayout(this);
-    vLayout = new QFormLayout(this);
+    vLayout = new QFormLayout;
     qvtk = new QVTKWidget(this);
 
     this->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
@@ -98,9 +106,11 @@ GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), removePickPoint(f
 template<typename _ItemT>
 GUIPCLViewerItem * GUIPCLViewer::addItem(std::string name, _ItemT &item) {
     GUIPCLViewerItem *obj;
-    obj = new GUIPCLViewerItem(this);
+    QPushButton *delItem = new QPushButton(style()->standardIcon(QStyle::StandardPixmap::SP_DockWidgetCloseButton), "", this);
+    obj = new GUIPCLViewerItem(vLayoutWidget);
     obj->setItem<_ItemT>(name, item);
-    vLayout->addRow(obj);
+    vLayout->addRow(obj, delItem);
+    connect(delItem, &QPushButton::clicked, std::bind(&GUIPCLViewer::deleteItem, this, name));
     if(this->items.size() == 0) {
         connect(timer, &QTimer::timeout, this, &GUIPCLViewer::refresh);
         timer->start(16);
@@ -109,18 +119,47 @@ GUIPCLViewerItem * GUIPCLViewer::addItem(std::string name, _ItemT &item) {
     return obj;
 }
 
+void GUIPCLViewer::deleteItem(std::string deleteName) {
+    for(int i = 0; i < items.size(); i++) {
+        std::string name = items[i]->getName();
+        if(deleteName == name.substr(0, deleteName.size())) {
+            viewer->removePointCloud(name);
+            viewer->removeShape(name+" line");
+            items.erase(items.begin() + i);
+            vLayout->removeRow(i);
+            break;
+        }
+    }
+    qvtk->update();
+}
+
 void GUIPCLViewer::refresh() {
     for(auto &item : items) {
-        GUIPCLViewerItem::Color color = item->getColor();
-        std::string name = item->getName();
+        if(!item) continue;
         PointCloudPtrT cloud(new PointCloudT);
-
+        std::string name = item->getName();
         cloud = item->getCloud();
-
-        if(color.data == 0) {
-            myFunction::updateCloud(viewer, cloud, name, color.r, color.g, color.b);
+        if(item->isVisable()) {
+            GUIPCLViewerItem::Color color = item->getColor();
+            if(color.data == 0) {
+                myFunction::updateCloud(viewer, cloud, name, color.r, color.g, color.b);
+            } else {
+                myFunction::updateCloud(viewer, cloud, name, double(color.data) * 100.0);
+            }
+            if(viewer->removeShape(name+" line")) {
+                PointT p1, p2;
+                p1 = *(cloud->points.begin());
+                p2 = *(cloud->points.end()-1);
+                viewer->addLine(p1, p2, double(color.r)/255.0, double(color.g)/255.0, double(color.b)/255.0, item->getName()+" line");
+            }
         } else {
-            myFunction::updateCloud(viewer, cloud, name, double(color.data) * 100.0);
+            viewer->removePointCloud(name);
+            if(viewer->removeShape(name+" line")) {
+                PointT p1, p2;
+                p1 = *(cloud->points.begin());
+                p2 = *(cloud->points.end()-1);
+                viewer->addLine(p1, p2, 0.0, 0.0, 0.0, item->getName()+" line");
+            }
         }
     }
     qvtk->update();
@@ -133,7 +172,7 @@ void GUIPCLViewer::keyboardEventOccurred(const pcl::visualization::KeyboardEvent
     }
     else if(((event.getKeySym() == "Shift_L")||(event.getKeySym() == "Shift_R"))&&(event.keyUp()))
     {
-        removePickPoint = true;
+        if(pickedPointsItemNames.size() > pickPointsCount) pickPointsCount++;
     }
     else 
     {
@@ -153,17 +192,13 @@ void GUIPCLViewer::pointPickingEventOccurred(const pcl::visualization::PointPick
     PointPtrT pointPtr(new PointT);
 
     event.getPoint(pointPtr->x, pointPtr->y, pointPtr->z);
-    
-    GUIPCLViewerItem *item = getItemPtrByName(pickedPointsItemName);
-    if(!item) {
-        item = addItem(pickedPointsItemName, pointPtr);
+    GUIPCLViewerItem *item = nullptr;
+    if(pickedPointsItemNames.size() > pickPointsCount) {
+        item = getItemPtrByName(pickedPointsItemNames[pickPointsCount]);
+        item->addItem<PointPtrT>(pointPtr);
     } else {
-        if(removePickPoint) {
-            item->resetItem<PointPtrT>(pickedPointsItemName, pointPtr);
-            removePickPoint = false;
-        } else {
-            item->addItem<PointPtrT>(pointPtr);
-        }
+        pickedPointsItemNames.push_back("picked points " + std::to_string(pickPointsCount) + " ");
+        item = addItem("picked points " + std::to_string(pickPointsCount) + " ", pointPtr);
     }
 
     PointCloudPtrT cloud(new PointCloudT);
@@ -179,14 +214,11 @@ void GUIPCLViewer::pointPickingEventOccurred(const pcl::visualization::PointPick
 
         GUIPCLViewerItem::Color color = item->getColor();
 
-        viewer->removeShape("pickedPointsLine");
-        viewer->addLine(p1, p2, color.r, color.g, color.b, "pickedPointsLine");
-        pickedPointsItemName = "pick points( " + std::to_string(d) + " m)";
-        item->resetItem<PointCloudPtrT>(pickedPointsItemName, cloud);
-    } else {
-        viewer->removeShape("pickedPointsLine");
-        pickedPointsItemName = "pick points";
-        item->resetItem<PointCloudPtrT>(pickedPointsItemName, cloud);
+        viewer->removePointCloud(pickedPointsItemNames[pickPointsCount]);
+        viewer->removeShape(pickedPointsItemNames[pickPointsCount]+" line");
+        pickedPointsItemNames[pickPointsCount] = "picked points " + std::to_string(pickPointsCount) + " ( " + std::to_string(d) + " m)";
+        viewer->addLine(p1, p2, double(color.r)/255.0, double(color.g)/255.0, double(color.b)/255.0, pickedPointsItemNames[pickPointsCount]+" line");
+        item->resetItem<PointCloudPtrT>(pickedPointsItemNames[pickPointsCount], cloud);
     }
 
     //pickedPoints[pickCount] = point;

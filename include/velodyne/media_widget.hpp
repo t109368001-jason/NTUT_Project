@@ -64,6 +64,7 @@ MediaWidget::MediaWidget(int beg, int end, QWidget *parent) : QWidget(parent), p
     connect(timer_, &QTimer::timeout, this, &MediaWidget::run);
     setFrameId(0);
 }
+
 void MediaWidget::start(int delay_ms) {
     pause_ = false;
     timer_->start(100);

@@ -85,6 +85,7 @@ void MicroStopwatch::pause() {
 void MicroStopwatch::stop() {
     pause();
     stoped_ = true;
+    std::cout << name_ + ": " <<  commaFix(elapsedCurrent) + " us" << std::endl;
 }
 
 void MicroStopwatch::tic(bool ticPrintName)

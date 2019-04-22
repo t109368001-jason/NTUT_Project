@@ -52,6 +52,9 @@ namespace velodyne {
 
 using namespace velodyne;
 GUI::GUI(QWidget *parent) : QMainWindow(parent) {
+
+    if(getuid()) throw std::runtime_error( "Please run as root" );
+
     setWindowTitle("velydyne gui");
     setWindowState(Qt::WindowMaximized);
     statusBar()->showMessage("Initializing");
@@ -95,7 +98,7 @@ void GUI::openFile(Mode mode) {
         
         QStringList filenames = QFileDialog::getOpenFileNames(this,
                     "Select one or more files to open",
-                    QDir::currentPath(),
+                    "$HOME",
                     "pcd files (*.pcd)" );
         
         if( !filenames.isEmpty() )
@@ -110,7 +113,7 @@ void GUI::openFile(Mode mode) {
     } else if(mode == Mode::PCAP_VIEWER) {
         QStringList filenames = QFileDialog::getOpenFileNames(this,
                     "Select one or more files to open",
-                    QDir::currentPath(),
+                    "$HOME",
                     "pcap files (*.pcap)" );
 
         if( !filenames.isEmpty() )

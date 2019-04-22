@@ -3,6 +3,7 @@
 #include <QGridLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QCheckBox>
 #include <boost/variant.hpp>
 #include <velodyne/pcap_cache.hpp>
 #include <velodyne/media_widget.hpp>
@@ -33,6 +34,10 @@ namespace velodyne {
 
         PointCloudPtrT getCloud();
 
+        bool isVisable() {
+            return checkBox->checkState() == Qt::CheckState::Checked;
+        }
+
         template<typename _ItemT>
         void setItem(std::string name, _ItemT &item);
 
@@ -46,11 +51,13 @@ namespace velodyne {
         QGridLayout *layout;
         QLabel *nameLabel;
         QPushButton *colorButton;
+        QCheckBox *checkBox;
 
         GUIPCLViewerItemT item;
         MediaWidget *mediaTool;
 
         std::string name;
+        std::string name2;
         Color color;
 
         void colorButtonUpdateColor();
@@ -65,11 +72,14 @@ GUIPCLViewerItem::GUIPCLViewerItem(QWidget *parent) : QWidget(parent), color(Col
     layout = new QGridLayout(this);
     nameLabel = new QLabel(this);
     colorButton = new QPushButton(this);
+    checkBox = new QCheckBox("", this);
     nameLabel->setFixedHeight(20);
     colorButton->setFixedHeight(20);
-    layout->addWidget(nameLabel, 0, 0);
-    layout->addWidget(colorButton, 0, 1);
-    adjustSize();
+    checkBox->setChecked(true);
+    layout->addWidget(checkBox, 0, 0);
+    layout->addWidget(nameLabel, 0, 1);
+    layout->addWidget(colorButton, 0, 2);
+    setLayout(layout);
 }
 
 GUIPCLViewerItem::Color GUIPCLViewerItem::getColor() {
@@ -179,7 +189,7 @@ void GUIPCLViewerItem::colorButtonUpdateColor() {
 }
 
 void GUIPCLViewerItem::colorButtonClicked() {
-    QColor newColor = QColorDialog::getColor(QColor(255, 255, 255), this);
+    QColor newColor = QColorDialog::getColor(QColor(255, 255, 255), QApplication::topLevelAt(this->mapToGlobal(QPoint())));
     color.r = newColor.red();
     color.g = newColor.green();
     color.b = newColor.blue();
