@@ -1,0 +1,13 @@
+{
+  "tasks": [
+    {
+      "type": "shell",
+      "label": "ninja",
+      "command": "time -p ninja -j8",
+      "args": [
+
+      ]
+    }
+  ],
+  "version": "2.0.0"
+}
