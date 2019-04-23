@@ -41,9 +41,9 @@ namespace velodyne {
             int backNumber;
             int compareFrameNumber;
             double resolution;
-
-
+            bool showBack;
             bool converted;
+            bool backChange;
 
             PcapCache() : outputPath("/tmp/pcapCache/"), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
             PcapCache(std::string outputPath) : outputPath(outputPath + "/"), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
@@ -143,9 +143,13 @@ namespace velodyne {
                 return cloud;
             }
 
+            void showback (bool showBack){
+                this->showBack = showBack;
+            }
+
             PointCloudPtrT get(int index) {
                 PointCloudPtrT cloud(new PointCloudT);
-                pcl::io::loadPCDFile<PointT>(outputPath.string() + std::to_string(index) + ".pcd", *cloud);
+                pcl::io::loadPCDFile<PointT>((showBack) ? outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd" : outputPath.string() + std::to_string(index) + ".pcd", *cloud);
                 return cloud;
             }
 
@@ -169,7 +173,6 @@ namespace velodyne {
 
             std::string getConfigString() {
                 std::stringstream ss;
-
                 ss << "totalFrame="<< this->totalFrame << std::endl;
                 ss << "beg="<< this->beg << std::endl;
                 ss << "end="<< this->end << std::endl;
@@ -217,7 +220,7 @@ namespace velodyne {
                 boost::split(sv2, s2, boost::is_any_of("\n"));
                 int i = 1;
                 while(i < sv1.size() || i < sv2.size()) {
-                    if((i == 3)&&(this->backNumber == 0)) {
+                    if(i == 3) {
                         i++;
                         continue;
                     }
@@ -239,6 +242,9 @@ namespace velodyne {
                     }
                     i++;
                 }
+                
+                this->backChange = (sv1[3] != sv2[3]) ? true : false;
+
                 boost::split(sv1, sv1[0], boost::is_any_of("="));
                 totalFrame = std::stoull(sv1[1]);
                 return true;
@@ -255,96 +261,102 @@ namespace velodyne {
                     mkdir(outputPath.string().c_str(), 0777);
                 }
 
-                if(exists()) {
-                    converted = true;
-                    return true;
-                }
+                if(!exists()) {
+                    for(int64_t i = 0; i < (beg+1); i++) {
+                        getCloudFromCapture();
+                    }
+                    totalFrame += beg;
 
-                for(int64_t i = 0; i < (beg+1); i++) {
-                    getCloudFromCapture();
-                }
-                totalFrame += beg;
-
-                boost::function<void( const std::string &file_name, PointCloudPtrT &cloud )> function =
-                    [] ( const std::string &file_name, PointCloudPtrT &cloud){
-                        pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, *cloud);
-                    };
-                
-                std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
-                while(filesIsRun()&&(totalFrame < end)) {
+                    boost::function<void( const std::string &file_name, PointCloudPtrT &cloud )> function =
+                        [] ( const std::string &file_name, PointCloudPtrT &cloud){
+                            pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, *cloud);
+                        };
                     
-                    for(auto &thread : ts) {
+                    std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
+                    while(filesIsRun()&&(totalFrame < end)) {
                         
-                        if((!filesIsRun())||(totalFrame >= end)) {
-                            break;
-                        }
-                        PointCloudPtrT cloud;
-                        while((cloud ? cloud->points.size() == 0 : true)) {
-                            cloud = getCloudFromCapture();
-                        }
-                        if(thread)
-                        {
-                            if( thread->joinable() ){
-                                thread->join();
-                                thread->~thread();
-                                delete thread;
-                                thread = nullptr;
+                        for(auto &thread : ts) {
+                            
+                            if((!filesIsRun())||(totalFrame >= end)) {
+                                break;
+                            }
+                            PointCloudPtrT cloud;
+                            while((cloud ? cloud->points.size() == 0 : true)) {
+                                cloud = getCloudFromCapture();
+                            }
+                            if(thread)
+                            {
+                                if( thread->joinable() ){
+                                    thread->join();
+                                    thread->~thread();
+                                    delete thread;
+                                    thread = nullptr;
+                                    thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", cloud));
+                                }
+                            } else {
                                 thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", cloud));
                             }
-                        } else {
-                            thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", cloud));
+                            std::cout << totalFrame << "\033[5G" << std::flush;
+                            totalFrame++;
                         }
-                        std::cout << totalFrame << "\033[5G" << std::flush;
-                        totalFrame++;
                     }
-                }
-                std::cout << std::endl << "Complete! total: " << totalFrame << " frame" << std::endl;
-                for(auto &thread : ts) {
-                    if(thread) {
-                        while( !thread->joinable() );
-                        thread->join();
-                        thread->~thread();
-                        delete thread;
-                        thread = nullptr;
+                    std::cout << std::endl << "Complete! total: " << totalFrame << " frame" << std::endl;
+                    for(auto &thread : ts) {
+                        if(thread) {
+                            while( !thread->joinable() );
+                            thread->join();
+                            thread->~thread();
+                            delete thread;
+                            thread = nullptr;
+                        }
                     }
                 }
 
-                if(this->backNumber > 0)
-                {
-                    getBackground();
-                    pcl::io::savePCDFileBinaryCompressed<PointT>(outputPath.string() + "/back" + std::to_string(this->backNumber) + ".pcd", *back);
-
-                    boost::function<void(const std::string file_name, const int begin, const int ended)> function =
-                    [this] (const std::string file_name, const int begin, const int ended){
-                            myClass::backgroundSegmentation<PointT> b;                            
-                            b.setBackground(this->back, 1.0);
-
-                        for(int k = begin; k <= ended; k++){
-                            if(k >= this->totalFrame)break;
-
-                            boost::shared_ptr<pcl::PointCloud<PointT>> temp(new pcl::PointCloud<PointT>);
-                            pcl::io::loadPCDFile<PointT>( file_name + std::to_string(k) + ".pcd", *temp);
-
-                            temp = b.compute(temp);
-                            pcl::io::savePCDFileBinaryCompressed<PointT>(file_name + std::to_string(k) + ".pcd", *temp);
-                            std::cout << k << "\033[5G" << std::flush;
+                if((!exists())||(this->backChange)){
+                    if(this->backNumber > 0)
+                    {
+                        showBack = false;
+                        if(!myFunction::fileExists(outputPath.string() + "/noBack/"))
+                        {
+                            mkdir((outputPath.string() + "/noBack/").c_str(), 0777);
                         }
-                    };
 
-                    for(int j = 0; j<ts.size(); j++){
-                        int begin = j*this->totalFrame/ts.size();
-                        int ended = begin+this->totalFrame/ts.size();
+                        getBackground();
+                        pcl::io::savePCDFileBinaryCompressed<PointT>(outputPath.string() + "/back" + std::to_string(this->backNumber) + ".pcd", *back);
+                        std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
 
-                        ts[j] = new std::thread(std::bind(function, outputPath.string(), begin, ended));
-                    }
+                        boost::function<void(const std::string file_name, const int begin, const int ended)> function =
+                        [this] (const std::string file_name, const int begin, const int ended){
+                                myClass::backgroundSegmentation<PointT> b;                            
+                                b.setBackground(this->back, this->resolution);
 
-                    for(int j = 0; j < ts.size(); j++) {
-                        if(ts[j]) {
-                            while( !ts[j]->joinable() );
-                            ts[j]->join();
-                            ts[j]->~thread();
-                            delete ts[j];
-                            ts[j] = nullptr;
+                            for(int k = begin; k <= ended; k++){
+                                if(k >= this->totalFrame)break;
+
+                                boost::shared_ptr<pcl::PointCloud<PointT>> temp(new pcl::PointCloud<PointT>);
+                                pcl::io::loadPCDFile<PointT>( file_name + std::to_string(k) + ".pcd", *temp);
+
+                                temp = b.compute(temp);
+                                pcl::io::savePCDFileBinaryCompressed<PointT>(file_name + "/noBack/" + std::to_string(k) + ".pcd", *temp);
+                                std::cout << k << "\033[5G" << std::flush;
+                            }
+                        };
+
+                        for(int j = 0; j<ts.size(); j++){
+                            int begin = j*this->totalFrame/ts.size();
+                            int ended = begin+this->totalFrame/ts.size();
+
+                            ts[j] = new std::thread(std::bind(function, outputPath.string(), begin, ended));
+                        }
+
+                        for(int j = 0; j < ts.size(); j++) {
+                            if(ts[j]) {
+                                while( !ts[j]->joinable() );
+                                ts[j]->join();
+                                ts[j]->~thread();
+                                delete ts[j];
+                                ts[j] = nullptr;
+                            }
                         }
                     }
                 }

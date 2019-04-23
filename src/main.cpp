@@ -66,11 +66,15 @@ int main(int argc, char * argv[])
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> cloud(new pcl::PointCloud<pcl::PointXYZ>);
         //PointCloudPtrT cloud(new PointCloudT);
         
+        int compareFrameNumber = 100;
+        double resolution = 10.0;
+        int backNumber = 1000000;
         velodyne::PcapCache<PointT> pcapCache("/home/user/Downloads/pcapcache");
 
         for(int i = 0; i < pcapPaths.size(); i++) {
             pcapCache.add(pcapPaths[i].string(), "default");
         }    
+		pcapCache.addBack(backNumber, compareFrameNumber, resolution);
         pcapCache.convert();
         
         viewer.reset(new pcl::visualization::PCLVisualizer( "Velodyne Viewer" ));
@@ -79,21 +83,11 @@ int main(int argc, char * argv[])
         viewer->addCoordinateSystem( 3.0, "coordinate" );
         viewer->setCameraPosition( 0.0, 0.0, 1000.0, 0.0, 1.0, 0.0, 0 );
 
-        int compareFrameNumber = 100;
-        double resolution = 10.0;
-        int backNumber = 1000000;
         
         uint64_t displayFrameIndex = 0;
         int meanKNumber = 50;
         double stddevMulThreshNumber = 1.0;
 
-        velodyne::PcapCache<PointT> pcapCacheNoBack("/home/user/Downloads/pcapcache/noBack");
-
-        for(int i = 0; i < pcapPaths.size(); i++) {
-            pcapCacheNoBack.add(pcapPaths[i].string(), "default");
-        }    
-		pcapCacheNoBack.addBack(backNumber, compareFrameNumber, resolution);
-        pcapCacheNoBack.convert();
 
         int objectStopFrameRange = 100;
         std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> nochangeFrameNumber;
@@ -109,11 +103,12 @@ int main(int argc, char * argv[])
                 myFunction::getChanges<pcl::PointXYZ>(nochangeFrameNumber[displayFrameIndex], myFunction::getStatisticalOutlierRemoval<pcl::PointXYZ>(pcapCacheNoBack.get(displayFrameIndex), meanKNumber, stddevMulThreshNumber), resolution) : 
                 pcapCache.get(displayFrameIndex);
 */
-            cloud = (dynamicObject == true) ? 
-                pcapCacheNoBack.get(displayFrameIndex) : 
-                pcapCache.get(displayFrameIndex);
+            
+            pcapCache.showback((dynamicObject) ? true : false);
+            
+            cloud = pcapCache.get(displayFrameIndex);
 
-            cloud = (onlyBackground == true) ? pcapCacheNoBack.getBack() : cloud;
+            cloud = (onlyBackground == true) ? pcapCache.getBack() : cloud;
 
             if(cloud->points.size() == 0) continue;
 
