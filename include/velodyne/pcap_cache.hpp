@@ -8,18 +8,15 @@
 #define MAX_QUEUE_SIZE 100
 #endif
 
-#include <eigen3/Eigen/src/Core/Matrix.h>
-#include <pcl-1.8/pcl/registration/transforms.h>
 #include <pcl-1.8/pcl/io/pcd_io.h>
-#include "../basic_function.h"
-#include "../function.h"
-#include "../../3rdparty/VelodyneCapture/VelodyneCapture_cloud.h"
-#include "../backgroundSegmentation.h"
-
+#include <pcl-1.8/pcl/registration/transforms.h>
+#include <VelodyneCapture/VelodyneCapture_cloud.h>
+#include <basic_function.hpp>
+#include <backgroundSegmentation.hpp>
 
 namespace velodyne {
-
-    template<typename PointT>
+    typedef pcl::PointXYZ PointT;
+    
     class VLP16 {
         public:
             VLP16Capture<PointT> vlp16;
@@ -28,14 +25,14 @@ namespace velodyne {
             boost::shared_ptr<Eigen::Matrix4f> transformMatrixPtr;
     };
 
-    template<typename PointT>
+
     class PcapCache {
         typedef pcl::PointCloud<PointT> PointCloudT;
         typedef boost::shared_ptr<PointCloudT> PointCloudPtrT;
 
         public:
             boost::filesystem::path outputPath;
-            std::vector<boost::shared_ptr<VLP16<PointT>>> files;
+            std::vector<boost::shared_ptr<VLP16>> files;
             uint64_t beg, end, totalFrame;
             PointCloudPtrT back;
             int backNumber;
@@ -45,7 +42,7 @@ namespace velodyne {
             bool converted;
             bool backChange;
 
-            PcapCache() : outputPath("/tmp/pcapCache/"), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+            PcapCache() : outputPath("/tmp/pcapCache/"), showBack(true), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
             PcapCache(std::string outputPath) : outputPath(outputPath + "/"), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
 
             void addBack(int backNumber, int compareFrameNumber,  double resolution) {
@@ -55,8 +52,8 @@ namespace velodyne {
             }
 
             bool add(const std::string &pcapFilename, const int64_t &frameOffset = 0, const boost::shared_ptr<Eigen::Matrix4f> &transformMatrixPtr = nullptr) {
-                boost::shared_ptr<VLP16<PointT>> file;
-                file.reset(new VLP16<PointT>);
+                boost::shared_ptr<VLP16> file;
+                file.reset(new VLP16);
 
                 file->pcapFilename = pcapFilename;
                 file->frameOffset = frameOffset;
@@ -149,7 +146,7 @@ namespace velodyne {
 
             PointCloudPtrT get(int index) {
                 PointCloudPtrT cloud(new PointCloudT);
-                pcl::io::loadPCDFile<PointT>((showBack) ? outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd" : outputPath.string() + std::to_string(index) + ".pcd", *cloud);
+                pcl::io::loadPCDFile<PointT>((showBack) ? outputPath.string() + std::to_string(index) + ".pcd" : outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
                 return cloud;
             }
 

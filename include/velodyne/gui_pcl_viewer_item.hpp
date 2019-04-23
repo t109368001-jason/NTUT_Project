@@ -11,6 +11,7 @@
 
 namespace velodyne {
     typedef boost::shared_ptr<pcl::PointXYZ> PointPtrT;
+    typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;
     typedef boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> PointCloudPtrT;
     typedef boost::shared_ptr<PcapCache> PcapCachePtrT;
     typedef boost::variant<PointPtrT, PointCloudPtrT, PcapCachePtrT> GUIPCLViewerItemT;
@@ -170,7 +171,7 @@ void GUIPCLViewerItem::addItem(_ItemT &item) {
                 case 1:
                     std::copy(boost::get<PointCloudPtrT>(tmp)->points.begin(),
                         boost::get<PointCloudPtrT>(tmp)->points.end(),
-                        std:back_inserter:(cloud->points)
+                        std::back_inserter(cloud->points)
                     );
                     break;
             }

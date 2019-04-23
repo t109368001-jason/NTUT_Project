@@ -5,6 +5,7 @@
 #include <future>
 #include <sys/stat.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <microStopwatch.hpp>
 
 #include <date.h>
@@ -227,5 +228,80 @@ namespace myFunction
 			viewer->addPointCloud<pcl::PointXYZRGB> (cloud_rgb, rgb, name);
 		}
     }
+
+
+#pragma region getChanges
+
+	template<typename PointT>
+	typename pcl::PointCloud<PointT>::Ptr getChanges(const typename pcl::PointCloud<PointT>::Ptr &cloud1, const typename pcl::PointCloud<PointT>::Ptr &cloud2, const double &resolution)
+	{
+		typename pcl::PointCloud<PointT>::Ptr temp(new typename pcl::PointCloud<PointT>);
+		pcl::octree::OctreePointCloudChangeDetector<PointT> octree (resolution);
+		std::vector<int> newPointIdxVector;
+
+		octree.setInputCloud(cloud1);
+		octree.addPointsFromInputCloud();
+		octree.switchBuffers ();
+		octree.setInputCloud (cloud2);
+		octree.addPointsFromInputCloud ();
+		octree.getPointIndicesFromNewVoxels (newPointIdxVector);
+
+		for(auto it = newPointIdxVector.begin(); it != newPointIdxVector.end(); ++it)
+		{
+			temp->points.push_back(cloud2->points[*it]);
+		}
+
+		temp->width = static_cast<uint32_t>(temp->points.size());
+		temp->height = 1;
+
+		return temp;
+	}
+
+#pragma endregion getChanges
+
+#pragma region getNoChanges
+
+	template<typename PointT>
+	typename pcl::PointCloud<PointT>::Ptr getNoChanges(const typename pcl::PointCloud<PointT>::Ptr &cloud1, const typename pcl::PointCloud<PointT>::Ptr &cloud2, const double &resolution)
+	{
+		typename pcl::PointCloud<PointT>::Ptr temp(new typename pcl::PointCloud<PointT>);
+		pcl::octree::OctreePointCloudChangeDetector<PointT> octree (resolution);
+		std::vector<int> newPointIdxVector;
+
+		octree.setInputCloud(cloud1);
+		octree.addPointsFromInputCloud();
+		octree.switchBuffers ();
+		octree.setInputCloud (cloud2);
+		octree.addPointsFromInputCloud ();
+		octree.getPointIndicesFromNewVoxels (newPointIdxVector);
+
+		std::sort(newPointIdxVector.begin(), newPointIdxVector.end());
+
+		int it1;
+		auto it2 = newPointIdxVector.begin();
+		for(it1 = 0, it2 = newPointIdxVector.begin(); it1 < cloud2->points.size() && it2 != newPointIdxVector.end(); it1++) 
+		{
+			if(it1 != (*it2))
+			{
+				temp->points.push_back(cloud2->points[it1]);
+			} 
+			else 
+			{
+				it2++;
+			}
+		}
+		if(it2 == newPointIdxVector.end()) {
+			for(int i = it1; i < cloud2->points.size(); i++) {
+				temp->points.push_back(cloud2->points[i]);
+			}
+		}
+		temp->width = static_cast<uint32_t>(temp->points.size());
+		temp->height = 1;
+
+		return temp;
+	}
+
+#pragma endregion getChanges
+
 }
 #endif
