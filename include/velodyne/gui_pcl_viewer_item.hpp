@@ -129,7 +129,7 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
             delete colorButton;
             colorButton = nullptr;
             mediaTool = new MediaWidget(boost::get<PcapCachePtrT>(this->item)->beg, boost::get<PcapCachePtrT>(this->item)->totalFrame-1, this);
-            this->layout->addWidget(mediaTool, 0, 1);
+            this->layout->addWidget(mediaTool, 0, 2);
             break;
     }
 }
@@ -170,7 +170,7 @@ void GUIPCLViewerItem::addItem(_ItemT &item) {
                 case 1:
                     std::copy(boost::get<PointCloudPtrT>(tmp)->points.begin(),
                         boost::get<PointCloudPtrT>(tmp)->points.end(),
-                        std::back_inserter(cloud->points)
+                        std:back_inserter:(cloud->points)
                     );
                     break;
             }
@@ -189,7 +189,7 @@ void GUIPCLViewerItem::colorButtonUpdateColor() {
 }
 
 void GUIPCLViewerItem::colorButtonClicked() {
-    QColor newColor = QColorDialog::getColor(QColor(255, 255, 255), QApplication::topLevelAt(this->mapToGlobal(QPoint())));
+    QColor newColor = QColorDialog::getColor(QColor(255, 255, 255), this);
     color.r = newColor.red();
     color.g = newColor.green();
     color.b = newColor.blue();
