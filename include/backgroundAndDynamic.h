@@ -10,6 +10,7 @@
 #include "function.h"
 
 using namespace std;
+using namespace velodyne;
 
 namespace myFunction
 {
@@ -42,7 +43,7 @@ namespace myFunction
   }
 
   template <typename PointT>
-  std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> nochangeFrameIndex(typename velodyne::PcapCache<PointT> &pcapCacheNoBack, const int &objectStopFrameRange, int &objectNoChangesFramePoints, int &objectNoChangesFramePoints2, const double &resolution, const int &meanKNumber, const double &stddevMulThreshNumber)
+  std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> nochangeFrameIndex(typename PcapCache<PointT> &pcapCacheNoBack, const int &objectStopFrameRange, int &objectNoChangesFramePoints, int &objectNoChangesFramePoints2, const double &resolution, const int &meanKNumber, const double &stddevMulThreshNumber)
   {
     std::vector<std::thread *> ts(std::thread::hardware_concurrency() + 1);
     std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> backs(pcapCacheNoBack.totalFrame);
@@ -123,7 +124,7 @@ namespace myFunction
   }
 
   template <typename PointT>
-  typename pcl::PointCloud<PointT>::Ptr getBackground(typename velodyne::PcapCache<PointT> &pcapCache, const int &compareFrameNumber, const double resolution)
+  typename pcl::PointCloud<PointT>::Ptr getBackground(typename PcapCache<PointT> &pcapCache, const int &backNumber, const int &compareFrameNumber, const double resolution)
   {
     std::vector<std::thread *> ts(std::thread::hardware_concurrency() + 1);
     boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
@@ -186,7 +187,7 @@ namespace myFunction
     }
 
     for(auto cloud : backs) {
-      if(back->points.size() > 1500000) break;
+      if(back->points.size() > backNumber) break;
       cloud = myFunction::getChanges<pcl::PointXYZ>(back, cloud, 1.0);
       *back += *cloud;
       std::cout << " back size= " << back->points.size() << std::endl;
@@ -196,7 +197,7 @@ namespace myFunction
   }
 
   template <typename PointT>
-  typename pcl::PointCloud<PointT>::Ptr getBackground6(typename velodyne::PcapCache<PointT> &pcapCache, const int &compareFrameNumber, const double resolution)
+  typename pcl::PointCloud<PointT>::Ptr getBackground6(typename PcapCache<PointT> &pcapCache, const int &backNumber, const int &compareFrameNumber, const double resolution)
   {
     boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
     boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp(new pcl::PointCloud<pcl::PointXYZ>());
@@ -216,164 +217,11 @@ namespace myFunction
       *back += *combineTemp;
       std::cout << i << "  " << back->points.size() << std::endl;
       i += d;
-      if(back->points.size() > 1500000)break;
+      if(back->points.size() > backNumber)break;
     }
 
     return back;
   }
-
-  template <typename PointT>
-  typename pcl::PointCloud<PointT>::Ptr getBackground5(typename velodyne::PcapCache<PointT> &pcapCache, const int &compareFrameNumber, const double resolution)
-  {
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp(new pcl::PointCloud<pcl::PointXYZ>());
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp1(new pcl::PointCloud<pcl::PointXYZ>());
-
-    int d = pcapCache.totalFrame/compareFrameNumber/2*2;
-    int jump = compareFrameNumber/2;
-
-    back = pcapCache.get(0);
-
-    for(int i = 0; i < (pcapCache.totalFrame/2); i = i + d){
-      temp = myFunction::getNoChanges<pcl::PointXYZ>(back, pcapCache.get(i+(jump*d)), resolution);
-      temp1 = myFunction::getNoChanges<pcl::PointXYZ>(pcapCache.get(i+(jump*d)), back, resolution);
-      *back = *temp + *temp1;
-      std::cout << i << "  " << back->points.size() << std::endl;
-    }
-    return back;
-  }
-
-  template <typename PointT>
-  typename pcl::PointCloud<PointT>::Ptr getBackground4(typename velodyne::PcapCache<PointT> &pcapCache, const int &compareFrameNumber, const double resolution)
-  {
-
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp(new pcl::PointCloud<pcl::PointXYZ>());
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp1(new pcl::PointCloud<pcl::PointXYZ>());
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp(new pcl::PointCloud<pcl::PointXYZ>());
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp1(new pcl::PointCloud<pcl::PointXYZ>());
-
-
-    temp = pcapCache.get(0);
-    temp1 = pcapCache.get(0);
-    //begin = (begin == cfn - 1 ? cfn : (begin < 5 ? begin + cfn/2 : (begin + cfn/2 + 1)%cfn));
-    for (int i = compareFrameNumber/2; i < compareFrameNumber; i = (i == compareFrameNumber - 1 ? compareFrameNumber : (i < compareFrameNumber/2 ? i + compareFrameNumber/2 : (i + compareFrameNumber/2 + 1)%compareFrameNumber))){
-      temp = myFunction::getNoChanges<pcl::PointXYZ>(temp, pcapCache.get(i*pcapCache.totalFrame/compareFrameNumber), resolution);
-      temp1 = myFunction::getNoChanges<pcl::PointXYZ>(pcapCache.get(i*pcapCache.totalFrame/compareFrameNumber), temp1, resolution);
-    }
-
-    combineTemp = myFunction::getNoChanges<pcl::PointXYZ>(temp, temp1, resolution);
-    combineTemp1 = myFunction::getNoChanges<pcl::PointXYZ>(temp1, temp, resolution);
-
-    *back = *combineTemp + *combineTemp1;
-
-    return back;
-
-  }
-
-  template <typename PointT>
-  typename pcl::PointCloud<PointT>::Ptr getBackground3(typename velodyne::PcapCache<PointT> &pcapCache, const int &compareFrameNumber, const double resolution)
-  {
-    std::vector<std::thread *> ts(std::thread::hardware_concurrency() + 1);
-    std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> backCloud(ts.size());
-    boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
-
-    boost::function<void(const int nowTsSize)> function =
-        [&pcapCache, &compareFrameNumber, &ts, &backCloud, &resolution](const int nowTsSize) {
-          boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
-          boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp(new pcl::PointCloud<pcl::PointXYZ>());
-          boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp1(new pcl::PointCloud<pcl::PointXYZ>());
-          boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp(new pcl::PointCloud<pcl::PointXYZ>());
-          boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp1(new pcl::PointCloud<pcl::PointXYZ>());
-
-          auto begin = nowTsSize * pcapCache.totalFrame / compareFrameNumber;
-
-          auto d = pcapCache.totalFrame / compareFrameNumber * ts.size();
-
-          temp = pcapCache.get(begin);
-          temp1 = pcapCache.get(begin);
-
-          for (int i = begin + d; i < pcapCache.totalFrame; i = i + d)
-          {
-            temp = myFunction::getNoChanges<pcl::PointXYZ>(temp, pcapCache.get(i), resolution);
-            temp1 = myFunction::getNoChanges<pcl::PointXYZ>(pcapCache.get(i), temp1, resolution);
-          }
-
-          combineTemp = myFunction::getNoChanges<pcl::PointXYZ>(temp, temp1, resolution);
-          combineTemp1 = myFunction::getNoChanges<pcl::PointXYZ>(temp1, temp, resolution);
-
-          *back = *combineTemp + *combineTemp1;
-
-          backCloud[nowTsSize] = back;
-        };
-
-    for (int j = 0; j < ts.size(); j++)
-    {
-      ts[j] = new std::thread(std::bind(function, j));
-    }
-
-    for (auto &thread : ts)
-    {
-      while (!(thread->joinable()))
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      thread->join();
-    }
-
-    std::cout << backCloud.size() << std::endl;
-
-    back = backCloud[0];
-
-    for (int i = 1; i < backCloud.size(); i++)
-    {
-      back = myFunction::getNoChanges<pcl::PointXYZ>(back, backCloud[i], resolution);
-    }
-
-    if (back->points.size() == 0)
-      back = backCloud[0];
-
-    std::cout << back->points.size() << std::endl;
-
-    return back;
-  }
-
-  template<typename PointT>
-	typename pcl::PointCloud<PointT>::Ptr getBackground2(typename velodyne::PcapCache<PointT> &pcapCache, const int &offsetFrame, const int &compareFrameNumber, const int &times, const double resolution)
-	{
-		std::vector<boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>> backCloud;
-        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> back(new pcl::PointCloud<pcl::PointXYZ>());
-        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp(new pcl::PointCloud<pcl::PointXYZ>());
-        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> temp1(new pcl::PointCloud<pcl::PointXYZ>());
-        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp(new pcl::PointCloud<pcl::PointXYZ>());
-        boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> combineTemp1(new pcl::PointCloud<pcl::PointXYZ>());
-
-		for(int j = 0; j < times; j++){
-            temp = pcapCache.get(offsetFrame + j*pcapCache.totalFrame/compareFrameNumber/times);
-            temp1 = pcapCache.get(offsetFrame + j*pcapCache.totalFrame/compareFrameNumber/times);
-
-            for(int i = (j + times); i < (compareFrameNumber*times); i = i + times){
-                temp = myFunction::getNoChanges<pcl::PointXYZ>(temp, pcapCache.get(offsetFrame + i*pcapCache.totalFrame/compareFrameNumber/times), resolution);
-                temp1 = myFunction::getNoChanges<pcl::PointXYZ>(pcapCache.get(offsetFrame + i*pcapCache.totalFrame/compareFrameNumber/times), temp1, resolution);
-            }
-
-            combineTemp = myFunction::getNoChanges<pcl::PointXYZ>(temp, temp1, resolution);
-            combineTemp1 = myFunction::getNoChanges<pcl::PointXYZ>(temp1, temp, resolution);
-
-            *back = *combineTemp + *combineTemp1;
-            backCloud.push_back(back);
-        }
-
-        back = backCloud[0];
-
-        for(int i = 1; i < backCloud.size(); i++){
-            back = myFunction::getNoChanges<pcl::PointXYZ>(back, backCloud[i], resolution);
-        }
-
-        if(back->points.size() == 0) back = backCloud[0];
-
-        std::cout<< back->points.size() << std::endl;
-
-		return back;
-	}
 
 } // namespace myFunction
 #endif
