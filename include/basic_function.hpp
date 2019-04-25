@@ -19,10 +19,11 @@ typedef boost::shared_ptr<pcl::visualization::PCLVisualizer> ViewerPtrT;
 namespace boost{namespace filesystem{
 
     boost::filesystem::path relative(boost::filesystem::path from, boost::filesystem::path to);
+
 }}
 
-namespace myFunction
-{
+namespace myFunction {
+
 	bool fileExists(const std::string &filename);
 
 	template<typename RandomIt1, typename RandomIt2, typename RandomIt3> 
@@ -49,41 +50,37 @@ namespace myFunction
 
 namespace boost{namespace filesystem{
 
-    boost::filesystem::path relative(boost::filesystem::path from, boost::filesystem::path to)
-    {
-    // Start at the root path and while they are the same then do nothing then when they first
-    // diverge take the entire from path, swap it with '..' segments, and then append the remainder of the to path.
-    boost::filesystem::path::const_iterator fromIter = from.begin();
-    boost::filesystem::path::const_iterator toIter = to.begin();
+    boost::filesystem::path relative(boost::filesystem::path from, boost::filesystem::path to) {
+        // Start at the root path and while they are the same then do nothing then when they first
+        // diverge take the entire from path, swap it with '..' segments, and then append the remainder of the to path.
+        boost::filesystem::path::const_iterator fromIter = from.begin();
+        boost::filesystem::path::const_iterator toIter = to.begin();
 
-    // Loop through both while they are the same to find nearest common directory
-    while (fromIter != from.end() && toIter != to.end() && (*toIter) == (*fromIter))
-    {
-        ++toIter;
-        ++fromIter;
-    }
+        // Loop through both while they are the same to find nearest common directory
+        while (fromIter != from.end() && toIter != to.end() && (*toIter) == (*fromIter)) {
+            ++toIter;
+            ++fromIter;
+        }
 
-    // Replace from path segments with '..' (from => nearest common directory)
-    boost::filesystem::path finalPath;
-    while (fromIter != from.end())
-    {
-        finalPath /= "..";
-        ++fromIter;
-    }
+        // Replace from path segments with '..' (from => nearest common directory)
+        boost::filesystem::path finalPath;
+        while (fromIter != from.end()) {
+            finalPath /= "..";
+            ++fromIter;
+        }
 
-    // Append the remainder of the to path (nearest common directory => to)
-    while (toIter != to.end())
-    {
-        finalPath /= *toIter;
-        ++toIter;
-    }
+        // Append the remainder of the to path (nearest common directory => to)
+        while (toIter != to.end()) {
+            finalPath /= *toIter;
+            ++toIter;
+        }
 
-    return finalPath;
+        return finalPath;
     }
 }}
 
-namespace myFunction
-{
+namespace myFunction {
+
 	bool fileExists(const std::string &filename) {
 		struct stat buffer;
 		return (stat(filename.c_str(), &buffer) == 0);
@@ -95,8 +92,7 @@ namespace myFunction
     }
 
 	template<typename Type>
-	std::string commaFix(const Type &input)		//1000000 -> 1,000,000
-	{
+	std::string commaFix(const Type &input) {
         std::stringstream ss;
         ss.imbue(std::locale(""));
         ss << std::fixed << input;
@@ -105,8 +101,7 @@ namespace myFunction
 	}
 
     template<typename RandomIt>
-    std::string durationToString(const RandomIt &duration, const bool isFileName)
-    {
+    std::string durationToString(const RandomIt &duration, const bool isFileName) {
         std::ostringstream stream;
         std::chrono::time_point<std::chrono::system_clock> tp = std::chrono::time_point<std::chrono::system_clock>(duration);
         tp += std::chrono::hours(TIMEZONE);
@@ -207,7 +202,6 @@ namespace myFunction
     }
 
     void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const uint8_t &r, const uint8_t &g, const uint8_t &b) {
-
 		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> rgb(cloud, r, g, b);
 
 		if( !viewer->updatePointCloud<pcl::PointXYZ> (cloud, rgb, name))
@@ -217,7 +211,6 @@ namespace myFunction
     }
 
     void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const double maxRange) {
-
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> cloud_rgb;
         cloud_rgb = XYZ_to_XYZRGB(cloud, maxRange);
 

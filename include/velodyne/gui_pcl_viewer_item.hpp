@@ -7,14 +7,16 @@
 #include <boost/variant.hpp>
 #include <velodyne/pcap_cache.hpp>
 #include <velodyne/media_widget.hpp>
+#include <pcl/visualization/pcl_visualizer.h>
 #include <QColorDialog>
 
 namespace velodyne {
-    typedef boost::shared_ptr<pcl::PointXYZ> PointPtrT;
-    typedef pcl::PointCloud<pcl::PointXYZ> PointCloudT;
-    typedef boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> PointCloudPtrT;
+    typedef pcl::PointXYZ PointT;
+    typedef std::vector<PointT> PointsT;
+    typedef boost::shared_ptr<pcl::PointCloud<PointT>> PointCloudPtrT;
     typedef boost::shared_ptr<PcapCache> PcapCachePtrT;
-    typedef boost::variant<PointPtrT, PointCloudPtrT, PcapCachePtrT> GUIPCLViewerItemT;
+    typedef boost::variant<PointsT, PointCloudPtrT, PcapCachePtrT> GUIPCLViewerItemT;
+    typedef boost::shared_ptr<pcl::visualization::PCLVisualizer> ViewerPtrT;
     class GUIPCLViewerItem : public QWidget {
     public:
         union Color{
@@ -28,172 +30,153 @@ namespace velodyne {
         };
 
         GUIPCLViewerItem(QWidget *parent = nullptr);
-
-        Color getColor();
+        ~GUIPCLViewerItem() {
+            if(mediaTool_) {
+                delete mediaTool_;
+                mediaTool_ = nullptr;
+            }
+        }
 
         std::string getName();
 
-        PointCloudPtrT getCloud();
-
-        bool isVisable() {
-            return checkBox->checkState() == Qt::CheckState::Checked;
-        }
-
+        template<typename _ItemT>
+        void addItem(_ItemT &item);
         template<typename _ItemT>
         void setItem(std::string name, _ItemT &item);
 
-        template<typename _ItemT>
-        void resetItem(std::string name, _ItemT &item);
-
-        template<typename _ItemT>
-        void addItem(_ItemT &item);
+        void updateView(ViewerPtrT &viewer);
 
     private:
-        QGridLayout *layout;
-        QLabel *nameLabel;
-        QPushButton *colorButton;
-        QCheckBox *checkBox;
+        QGridLayout *layout_;
+        QLabel *nameLabel_;
+        QPushButton *colorButton_;
+        QCheckBox *checkBox_;
+        MediaWidget *mediaTool_;
 
-        GUIPCLViewerItemT item;
-        MediaWidget *mediaTool;
+        std::string name_;
+        
+        GUIPCLViewerItemT item_;
 
-        std::string name;
-        std::string name2;
-        Color color;
+        Color color_;
 
-        void colorButtonUpdateColor();
+        bool isChanged_;
 
         void colorButtonClicked();
+        void colorButtonUpdateColor();
 
     };
 }
 
 using namespace velodyne;
-GUIPCLViewerItem::GUIPCLViewerItem(QWidget *parent) : QWidget(parent), color(Color{0xff, 0xff, 0xff, 0x00}) {
-    layout = new QGridLayout(this);
-    nameLabel = new QLabel(this);
-    colorButton = new QPushButton(this);
-    checkBox = new QCheckBox("", this);
-    nameLabel->setFixedHeight(20);
-    colorButton->setFixedHeight(20);
-    checkBox->setChecked(true);
-    layout->addWidget(checkBox, 0, 0);
-    layout->addWidget(nameLabel, 0, 1);
-    layout->addWidget(colorButton, 0, 2);
-    setLayout(layout);
-}
+GUIPCLViewerItem::GUIPCLViewerItem(QWidget *parent) : QWidget(parent), color_(Color{0xff, 0xff, 0xff, 0x00}), colorButton_(nullptr), mediaTool_(nullptr) {
+    layout_ = new QGridLayout(this);
+    nameLabel_ = new QLabel(this);
+    checkBox_ = new QCheckBox("", this);
 
-GUIPCLViewerItem::Color GUIPCLViewerItem::getColor() {
-    return color;
+    checkBox_->setChecked(true);
+
+    layout_->addWidget(checkBox_, 0, 0);
+    layout_->addWidget(nameLabel_, 0, 2);
+    setLayout(layout_);
+
+    connect(checkBox_, &QCheckBox::stateChanged, [this](){isChanged_ = true;});
 }
 
 std::string GUIPCLViewerItem::getName() {
-    return name;
-}
-
-PointCloudPtrT GUIPCLViewerItem::getCloud() {
-    PointCloudPtrT cloud(new PointCloudT);
-    switch(item.which()) {
-        case 1:
-            cloud = boost::get<PointCloudPtrT>(item);
-UPDATE_CLOUD_CLOUD_PTR:
-            return cloud;
-            break;
-        case 2:
-            cloud = boost::get<PcapCachePtrT>(this->item)->get(mediaTool->getFrameId());
-
-            color.data = 40;
-            goto UPDATE_CLOUD_CLOUD_PTR;
-    }
-}
-
-template<typename _ItemT>
-void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
-    this->name = name;
-    this->item = item;
-    nameLabel->setText(name.c_str());
-    colorButtonUpdateColor();
-    colorButton->setFixedSize(20, 20);
-    connect(colorButton, &QPushButton::clicked, this, &GUIPCLViewerItem::colorButtonClicked);
-    PointCloudPtrT cloud(new PointCloudT);
-    switch(this->item.which()) {
-        case 0:
-            cloud->points.push_back(*boost::get<PointPtrT>(this->item));
-            cloud->width = static_cast<uint32_t>(cloud->points.size());
-            cloud->height = 1;
-            this->item = cloud;
-            break;
-        case 1:
-
-            break;
-        case 2:
-            delete colorButton;
-            colorButton = nullptr;
-            mediaTool = new MediaWidget(boost::get<PcapCachePtrT>(this->item)->beg, boost::get<PcapCachePtrT>(this->item)->totalFrame-1, this);
-            this->layout->addWidget(mediaTool, 0, 2);
-            break;
-    }
-}
-
-template<typename _ItemT>
-void GUIPCLViewerItem::resetItem(std::string name, _ItemT &item) {
-    this->name = name;
-    this->item = item;
-    nameLabel->setText(name.c_str());
-    PointCloudPtrT cloud(new PointCloudT);
-    switch(this->item.which()) {
-        case 0:
-            cloud->points.push_back(*boost::get<PointPtrT>(this->item));
-            cloud->width = static_cast<uint32_t>(cloud->points.size());
-            cloud->height = 1;
-            this->item = cloud;
-            break;
-        case 1:
-
-            break;
-        case 2:
-            break;
-    }
+    return name_;
 }
 
 template<typename _ItemT>
 void GUIPCLViewerItem::addItem(_ItemT &item) {
-    GUIPCLViewerItemT tmp = item;
-    PointCloudPtrT cloud;
-    switch(this->item.which()) {
-        case 1:
-            cloud = boost::get<PointCloudPtrT>(this->item);
-            switch (tmp.which())
-            {
-                case 0:
-                    cloud->points.push_back(*boost::get<PointPtrT>(tmp));
-                    break;
-                case 1:
-                    std::copy(boost::get<PointCloudPtrT>(tmp)->points.begin(),
-                        boost::get<PointCloudPtrT>(tmp)->points.end(),
-                        std::back_inserter(cloud->points)
-                    );
-                    break;
-            }
-            cloud->width = static_cast<uint32_t>(cloud->points.size());
-            cloud->height = 1;
+    GUIPCLViewerItemT itemIn = item;
+    switch(itemIn.which()) {
+        case 0:
+            std::copy(boost::get<PointsT>(itemIn).begin(), boost::get<PointsT>(itemIn).end(), std::back_inserter(boost::get<PointsT>(item_)));
             break;
+        case 1:
+            std::copy(boost::get<PointCloudPtrT>(itemIn)->points.begin(), boost::get<PointCloudPtrT>(itemIn)->points.end(), std::back_inserter(boost::get<PointCloudPtrT>(item_)->points));
+            boost::get<PointCloudPtrT>(item_)->width = static_cast<uint32_t>(boost::get<PointCloudPtrT>(item_)->points.size());
+            boost::get<PointCloudPtrT>(item_)->height = 1;
+            break;
+    }
+    isChanged_ = true;
+}
+
+template<typename _ItemT>
+void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
+    name_ = name;
+    nameLabel_->setText(name_.c_str());
+    item_ = item;
+    switch(item_.which()) {
+        case 0:
+        case 1:
+            if(!colorButton_) {
+                colorButton_ = new QPushButton(this);
+                colorButtonUpdateColor();
+                connect(colorButton_, &QPushButton::clicked, this, &GUIPCLViewerItem::colorButtonClicked);
+                layout_->addWidget(colorButton_, 0, 1);
+            }
+            if(mediaTool_) {
+                delete mediaTool_;
+                mediaTool_ = nullptr;
+            }
+            break;
+        case 2:
+            if(colorButton_) {
+                delete colorButton_;
+                colorButton_ = nullptr;
+            }
+            if(!mediaTool_) {
+                mediaTool_ = new MediaWidget(boost::get<PcapCachePtrT>(item_)->beg, boost::get<PcapCachePtrT>(item_)->totalFrame-1, this);
+                layout_->addWidget(mediaTool_, 0, 3);
+            }
+            color_.data = 50;
+            break;
+    }
+    isChanged_ = true;
+}
+
+void GUIPCLViewerItem::updateView(ViewerPtrT &viewer) {
+    if(item_.which() == 2) {
+        if(boost::get<PcapCachePtrT>(item_)->currentFrameId != mediaTool_->getFrameId()) isChanged_ = true;
+    }
+    if(isChanged_) {
+        viewer->removeShape(name_);
+        viewer->removePointCloud(name_);
+        if(checkBox_->checkState() == Qt::CheckState::Checked) {
+            if(item_.which() == 0) {
+                if(boost::get<PointsT>(item_).size() > 1) {
+                    PointT p1 = boost::get<PointsT>(item_).front();
+                    PointT p2 = boost::get<PointsT>(item_).back();
+                    double d = std::sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z))/100.0;
+                    nameLabel_->setText((name_ + "(" + std::to_string(d) + " m)").c_str());
+                    viewer->addLine(p1, p2, double(color_.r)/255.0, double(color_.g)/255.0, double(color_.b)/255.0, name_);
+                }
+            } else if(item_.which() == 1) {
+                myFunction::updateCloud(viewer, boost::get<PointCloudPtrT>(item_), name_, color_.r, color_.g, color_.b);
+            } else {
+                myFunction::updateCloud(viewer, boost::get<PcapCachePtrT>(item_)->get(mediaTool_->getFrameId()), name_, double(color_.data) * 100.0);
+            }
+        }
+        isChanged_ = false;
     }
 }
 
-void GUIPCLViewerItem::colorButtonUpdateColor() {
-    QPalette pal = colorButton->palette();
-    pal.setColor(QPalette::Button, QColor(color.r, color.g, color.b));
-    colorButton->setAutoFillBackground(true);
-    colorButton->setPalette(pal);
-    colorButton->update();
-}
-
 void GUIPCLViewerItem::colorButtonClicked() {
-    QColor newColor = QColorDialog::getColor(QColor(255, 255, 255), this);
-    color.r = newColor.red();
-    color.g = newColor.green();
-    color.b = newColor.blue();
+    QColor newColor = QColorDialog::getColor(QColor(color_.r, color_.g, color_.b), this);
+    color_.r = newColor.red();
+    color_.g = newColor.green();
+    color_.b = newColor.blue();
     colorButtonUpdateColor();
 }
+
+void GUIPCLViewerItem::colorButtonUpdateColor() {
+    QPalette pal = colorButton_->palette();
+    pal.setColor(QPalette::Button, QColor(color_.r, color_.g, color_.b));
+    colorButton_->setAutoFillBackground(true);
+    colorButton_->setPalette(pal);
+    colorButton_->update();
+    isChanged_ = true;
+}
+
 #endif

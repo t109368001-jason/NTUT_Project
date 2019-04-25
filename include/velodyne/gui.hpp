@@ -3,21 +3,24 @@
 #include <QMainWindow>
 #include <QGuiApplication>
 #include <QApplication>
-#include <QMenu>
+#include <QMenuBar>
 #include <QAction>
 #include <QFileDialog>
+#include <QStatusBar>
 #include <QStyle>
+
 #include <boost/filesystem.hpp>
 #include <vtk-6.3/QVTKWidget.h>
 #include <vtk-6.3/vtkRenderWindow.h>
 #include <pcl-1.8/pcl/point_cloud.h>
 #include <pcl-1.8/pcl/visualization/pcl_visualizer.h>
+
 #include <microStopwatch.hpp>
 #include <basic_function.hpp>
 #include <velodyne/function.hpp>
 #include <velodyne/pcap_cache.hpp>
 #include <velodyne/gui_pcl_viewer.hpp>
-#include <velodyne/merge_tool_gui_plugin.hpp>
+#include <velodyne/merge_tool.hpp>
 
 namespace velodyne {
     class GUI : public QMainWindow
