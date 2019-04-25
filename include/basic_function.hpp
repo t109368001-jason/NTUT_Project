@@ -5,6 +5,7 @@
 #include <future>
 #include <sys/stat.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/octree/octree_pointcloud_changedetector.h>
 #include <microStopwatch.hpp>
 
 #include <date.h>
@@ -18,10 +19,11 @@ typedef boost::shared_ptr<pcl::visualization::PCLVisualizer> ViewerPtrT;
 namespace boost{namespace filesystem{
 
     boost::filesystem::path relative(boost::filesystem::path from, boost::filesystem::path to);
+
 }}
 
-namespace myFunction
-{
+namespace myFunction {
+
 	bool fileExists(const std::string &filename);
 
 	template<typename RandomIt1, typename RandomIt2, typename RandomIt3> 
@@ -48,41 +50,37 @@ namespace myFunction
 
 namespace boost{namespace filesystem{
 
-    boost::filesystem::path relative(boost::filesystem::path from, boost::filesystem::path to)
-    {
-    // Start at the root path and while they are the same then do nothing then when they first
-    // diverge take the entire from path, swap it with '..' segments, and then append the remainder of the to path.
-    boost::filesystem::path::const_iterator fromIter = from.begin();
-    boost::filesystem::path::const_iterator toIter = to.begin();
+    boost::filesystem::path relative(boost::filesystem::path from, boost::filesystem::path to) {
+        // Start at the root path and while they are the same then do nothing then when they first
+        // diverge take the entire from path, swap it with '..' segments, and then append the remainder of the to path.
+        boost::filesystem::path::const_iterator fromIter = from.begin();
+        boost::filesystem::path::const_iterator toIter = to.begin();
 
-    // Loop through both while they are the same to find nearest common directory
-    while (fromIter != from.end() && toIter != to.end() && (*toIter) == (*fromIter))
-    {
-        ++toIter;
-        ++fromIter;
-    }
+        // Loop through both while they are the same to find nearest common directory
+        while (fromIter != from.end() && toIter != to.end() && (*toIter) == (*fromIter)) {
+            ++toIter;
+            ++fromIter;
+        }
 
-    // Replace from path segments with '..' (from => nearest common directory)
-    boost::filesystem::path finalPath;
-    while (fromIter != from.end())
-    {
-        finalPath /= "..";
-        ++fromIter;
-    }
+        // Replace from path segments with '..' (from => nearest common directory)
+        boost::filesystem::path finalPath;
+        while (fromIter != from.end()) {
+            finalPath /= "..";
+            ++fromIter;
+        }
 
-    // Append the remainder of the to path (nearest common directory => to)
-    while (toIter != to.end())
-    {
-        finalPath /= *toIter;
-        ++toIter;
-    }
+        // Append the remainder of the to path (nearest common directory => to)
+        while (toIter != to.end()) {
+            finalPath /= *toIter;
+            ++toIter;
+        }
 
-    return finalPath;
+        return finalPath;
     }
 }}
 
-namespace myFunction
-{
+namespace myFunction {
+
 	bool fileExists(const std::string &filename) {
 		struct stat buffer;
 		return (stat(filename.c_str(), &buffer) == 0);
@@ -94,8 +92,7 @@ namespace myFunction
     }
 
 	template<typename Type>
-	std::string commaFix(const Type &input)		//1000000 -> 1,000,000
-	{
+	std::string commaFix(const Type &input) {
         std::stringstream ss;
         ss.imbue(std::locale(""));
         ss << std::fixed << input;
@@ -104,8 +101,7 @@ namespace myFunction
 	}
 
     template<typename RandomIt>
-    std::string durationToString(const RandomIt &duration, const bool isFileName)
-    {
+    std::string durationToString(const RandomIt &duration, const bool isFileName) {
         std::ostringstream stream;
         std::chrono::time_point<std::chrono::system_clock> tp = std::chrono::time_point<std::chrono::system_clock>(duration);
         tp += std::chrono::hours(TIMEZONE);
@@ -206,7 +202,6 @@ namespace myFunction
     }
 
     void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const uint8_t &r, const uint8_t &g, const uint8_t &b) {
-
 		pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> rgb(cloud, r, g, b);
 
 		if( !viewer->updatePointCloud<pcl::PointXYZ> (cloud, rgb, name))
@@ -216,7 +211,6 @@ namespace myFunction
     }
 
     void updateCloud(ViewerPtrT &viewer, const PointCloudPtrT &cloud, const std::string &name, const double maxRange) {
-
         boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>> cloud_rgb;
         cloud_rgb = XYZ_to_XYZRGB(cloud, maxRange);
 
@@ -227,5 +221,80 @@ namespace myFunction
 			viewer->addPointCloud<pcl::PointXYZRGB> (cloud_rgb, rgb, name);
 		}
     }
+
+
+#pragma region getChanges
+
+	template<typename PointT>
+	typename pcl::PointCloud<PointT>::Ptr getChanges(const typename pcl::PointCloud<PointT>::Ptr &cloud1, const typename pcl::PointCloud<PointT>::Ptr &cloud2, const double &resolution)
+	{
+		typename pcl::PointCloud<PointT>::Ptr temp(new typename pcl::PointCloud<PointT>);
+		pcl::octree::OctreePointCloudChangeDetector<PointT> octree (resolution);
+		std::vector<int> newPointIdxVector;
+
+		octree.setInputCloud(cloud1);
+		octree.addPointsFromInputCloud();
+		octree.switchBuffers ();
+		octree.setInputCloud (cloud2);
+		octree.addPointsFromInputCloud ();
+		octree.getPointIndicesFromNewVoxels (newPointIdxVector);
+
+		for(auto it = newPointIdxVector.begin(); it != newPointIdxVector.end(); ++it)
+		{
+			temp->points.push_back(cloud2->points[*it]);
+		}
+
+		temp->width = static_cast<uint32_t>(temp->points.size());
+		temp->height = 1;
+
+		return temp;
+	}
+
+#pragma endregion getChanges
+
+#pragma region getNoChanges
+
+	template<typename PointT>
+	typename pcl::PointCloud<PointT>::Ptr getNoChanges(const typename pcl::PointCloud<PointT>::Ptr &cloud1, const typename pcl::PointCloud<PointT>::Ptr &cloud2, const double &resolution)
+	{
+		typename pcl::PointCloud<PointT>::Ptr temp(new typename pcl::PointCloud<PointT>);
+		pcl::octree::OctreePointCloudChangeDetector<PointT> octree (resolution);
+		std::vector<int> newPointIdxVector;
+
+		octree.setInputCloud(cloud1);
+		octree.addPointsFromInputCloud();
+		octree.switchBuffers ();
+		octree.setInputCloud (cloud2);
+		octree.addPointsFromInputCloud ();
+		octree.getPointIndicesFromNewVoxels (newPointIdxVector);
+
+		std::sort(newPointIdxVector.begin(), newPointIdxVector.end());
+
+		int it1;
+		auto it2 = newPointIdxVector.begin();
+		for(it1 = 0, it2 = newPointIdxVector.begin(); it1 < cloud2->points.size() && it2 != newPointIdxVector.end(); it1++) 
+		{
+			if(it1 != (*it2))
+			{
+				temp->points.push_back(cloud2->points[it1]);
+			} 
+			else 
+			{
+				it2++;
+			}
+		}
+		if(it2 == newPointIdxVector.end()) {
+			for(int i = it1; i < cloud2->points.size(); i++) {
+				temp->points.push_back(cloud2->points[i]);
+			}
+		}
+		temp->width = static_cast<uint32_t>(temp->points.size());
+		temp->height = 1;
+
+		return temp;
+	}
+
+#pragma endregion getChanges
+
 }
 #endif

@@ -3,6 +3,7 @@
 #include <QTimer>
 #include <QHBoxLayout>
 #include <QFormLayout>
+#include <QScrollArea>
 #include <vtk-6.3/QVTKWidget.h>
 #include <velodyne/gui_pcl_viewer_item.hpp>
 #include <pcl/visualization/pcl_visualizer.h>
@@ -19,17 +20,25 @@ namespace velodyne {
 
     class GUIPCLViewer : public QWidget {
     public:
-        ViewerPtrT viewer;
+        myClass::MicroStopwatch tt1;
+        myClass::MicroStopwatch tt2;
+        myClass::MicroStopwatch tt3;
+        myClass::MicroStopwatch tt4;
+        myClass::MicroStopwatch tt5;
 
+        ViewerPtrT viewer;
         QTimer *timer;
         QHBoxLayout *hLayout;
+        QScrollArea *scrollArea;
+        QWidget *vLayoutWidget;
         QFormLayout *vLayout;
         QVTKWidget *qvtk;
 
         std::vector<GUIPCLViewerItem*> items;
 
+        int pickedPointsCount;
+        bool newpickedPointsItem;
         std::string pickedPointsItemName;
-        bool removePickPoint;
 
         GUIPCLViewer(QWidget *parent);
         
@@ -38,13 +47,12 @@ namespace velodyne {
 
         void refresh();
 
+        void deleteItem(std::string deleteName);
+
         void keyboardEventOccurred(const pcl::visualization::KeyboardEvent& event, void* nothing);
         
         template<typename T>
-        void registerKeyboardCallback (void (T::*callback) (const pcl::visualization::KeyboardEvent&, void*), T& instance, void* cookie = NULL)
-        {
-            viewer->registerKeyboardCallback(boost::bind (callback,  boost::ref (instance), _1, cookie));
-        }
+        void registerKeyboardCallback (void (T::*callback) (const pcl::visualization::KeyboardEvent&, void*), T& instance, void* cookie = NULL);
 
         void mouseEventOccurred(const pcl::visualization::MouseEvent& event, void* nothing);
 
@@ -63,21 +71,23 @@ namespace velodyne {
 }
 
 using namespace velodyne;
-GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), removePickPoint(false), pickedPointsItemName("picked points") {
-    QWidget *vLayoutWidget = new QWidget(this);
+GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), pickedPointsCount(0), newpickedPointsItem(true), tt1("refresh"), tt2("refresh get"), tt3("refresh show") {
+    scrollArea = new QScrollArea(this);
+    vLayoutWidget = new QWidget(this);
     hLayout = new QHBoxLayout(this);
-    vLayout = new QFormLayout(this);
+    vLayout = new QFormLayout(vLayoutWidget);
     qvtk = new QVTKWidget(this);
 
     this->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
-    vLayoutWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Minimum);
+    vLayoutWidget->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
     qvtk->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+    scrollArea->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 
-    this->setLayout(hLayout);
-    vLayoutWidget->setLayout(vLayout);
+    scrollArea->setWidget(vLayoutWidget);
+    scrollArea->setWidgetResizable(true);
 
-    hLayout->addWidget(vLayoutWidget);
-    hLayout->addWidget(qvtk);
+    hLayout->addWidget(scrollArea, 25);
+    hLayout->addWidget(qvtk, 75);
 
     viewer.reset(new pcl::visualization::PCLVisualizer( "Velodyne Viewer", false));
     viewer->registerKeyboardCallback(&GUIPCLViewer::keyboardEventOccurred, *this);
@@ -93,14 +103,26 @@ GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), removePickPoint(f
     qvtk->update ();
         
     timer = new QTimer(this);
+
+    this->setLayout(hLayout);
+}
+
+
+
+template<typename T>
+void GUIPCLViewer::registerKeyboardCallback (void (T::*callback) (const pcl::visualization::KeyboardEvent&, void*), T& instance, void* cookie)
+{
+    viewer->registerKeyboardCallback(boost::bind (callback,  boost::ref (instance), _1, cookie));
 }
 
 template<typename _ItemT>
 GUIPCLViewerItem * GUIPCLViewer::addItem(std::string name, _ItemT &item) {
     GUIPCLViewerItem *obj;
-    obj = new GUIPCLViewerItem(this);
+    QPushButton *delItem = new QPushButton(style()->standardIcon(QStyle::StandardPixmap::SP_DockWidgetCloseButton), "", this);
+    obj = new GUIPCLViewerItem(vLayoutWidget);
     obj->setItem<_ItemT>(name, item);
-    vLayout->addRow(obj);
+    vLayout->addRow(obj, delItem);
+    connect(delItem, &QPushButton::clicked, std::bind(&GUIPCLViewer::deleteItem, this, name));
     if(this->items.size() == 0) {
         connect(timer, &QTimer::timeout, this, &GUIPCLViewer::refresh);
         timer->start(16);
@@ -109,19 +131,23 @@ GUIPCLViewerItem * GUIPCLViewer::addItem(std::string name, _ItemT &item) {
     return obj;
 }
 
+void GUIPCLViewer::deleteItem(std::string deleteName) {
+    for(int i = 0; i < items.size(); i++) {
+        std::string name = items[i]->getName();
+        if(deleteName == name.substr(0, deleteName.size())) {
+            viewer->removePointCloud(name);
+            viewer->removeShape(name);
+            items.erase(items.begin() + i);
+            vLayout->removeRow(i);
+            break;
+        }
+    }
+    qvtk->update();
+}
+
 void GUIPCLViewer::refresh() {
     for(auto &item : items) {
-        GUIPCLViewerItem::Color color = item->getColor();
-        std::string name = item->getName();
-        PointCloudPtrT cloud(new PointCloudT);
-
-        cloud = item->getCloud();
-
-        if(color.data == 0) {
-            myFunction::updateCloud(viewer, cloud, name, color.r, color.g, color.b);
-        } else {
-            myFunction::updateCloud(viewer, cloud, name, double(color.data) * 100.0);
-        }
+        item->updateView(viewer);
     }
     qvtk->update();
 }
@@ -133,7 +159,8 @@ void GUIPCLViewer::keyboardEventOccurred(const pcl::visualization::KeyboardEvent
     }
     else if(((event.getKeySym() == "Shift_L")||(event.getKeySym() == "Shift_R"))&&(event.keyUp()))
     {
-        removePickPoint = true;
+        if(!newpickedPointsItem) pickedPointsCount++;
+        newpickedPointsItem = true;
     }
     else 
     {
@@ -150,50 +177,25 @@ void GUIPCLViewer::mouseEventOccurred(const pcl::visualization::MouseEvent& even
 }
 
 void GUIPCLViewer::pointPickingEventOccurred(const pcl::visualization::PointPickingEvent& event, void* nothing) {
-    PointPtrT pointPtr(new PointT);
+    PointT p;
 
-    event.getPoint(pointPtr->x, pointPtr->y, pointPtr->z);
-    
-    GUIPCLViewerItem *item = getItemPtrByName(pickedPointsItemName);
-    if(!item) {
-        item = addItem(pickedPointsItemName, pointPtr);
+    event.getPoint(p.x, p.y, p.z);
+
+    if(p.x == 0 && p.y == 0 && p.z == 0) return;
+
+    std::vector<PointT> points;
+    points.push_back(p);
+    if(newpickedPointsItem) {
+        pickedPointsItemName = "picked points " + std::to_string(pickedPointsCount);
+        addItem<std::vector<PointT>>(pickedPointsItemName, points);
+        newpickedPointsItem = false;
     } else {
-        if(removePickPoint) {
-            item->resetItem<PointPtrT>(pickedPointsItemName, pointPtr);
-            removePickPoint = false;
-        } else {
-            item->addItem<PointPtrT>(pointPtr);
-        }
+        GUIPCLViewerItem *item = getItemPtrByName(pickedPointsItemName);
+        std::cout << item << std::endl;
+        item->addItem<std::vector<PointT>>(points);
     }
 
-    PointCloudPtrT cloud(new PointCloudT);
-    cloud = item->getCloud();
-    if(cloud->points.size() > 1) {
-        PointT p1, p2;
-        p1 = *(cloud->points.begin());
-        p2 = *(cloud->points.end()-1);
-        
-        double d = std::sqrt((p1.x-p2.x)*(p1.x-p2.x)
-        +(p1.y-p2.y)*(p1.y-p2.y)
-        +(p1.z-p2.z)*(p1.z-p2.z))/100.0;
-
-        GUIPCLViewerItem::Color color = item->getColor();
-
-        viewer->removeShape("pickedPointsLine");
-        viewer->addLine(p1, p2, color.r, color.g, color.b, "pickedPointsLine");
-        pickedPointsItemName = "pick points( " + std::to_string(d) + " m)";
-        item->resetItem<PointCloudPtrT>(pickedPointsItemName, cloud);
-    } else {
-        viewer->removeShape("pickedPointsLine");
-        pickedPointsItemName = "pick points";
-        item->resetItem<PointCloudPtrT>(pickedPointsItemName, cloud);
-    }
-
-    //pickedPoints[pickCount] = point;
-    
-    std::cout << "Picked : " << *pointPtr << std::endl;
-    //pickCount = (pickCount + 1) % 2;
-    //std::cout << ", distance between last" << pickedPoints[pickCount] <<  " is " << myFunction::distance(pickedPoints[0], pickedPoints[1]) << std::endl;
+    std::cout << "Picked : " << p << std::endl;
 }
 
 void GUIPCLViewer::areaPickingEventOccurred(const pcl::visualization::AreaPickingEvent& event, void* nothing) {
