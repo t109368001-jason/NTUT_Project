@@ -11,19 +11,42 @@
             "label": "cmake",
             "type": "shell",
             "command": "cmake -GNinja -DCMAKE_BUILD_TYPE=Debug ..",
-            "group": "build",
             "problemMatcher": [
                 "$gcc"
-            ]
+            ],
+            "presentation": {
+                "clear": true                        // <-- this line
+            }
         },
         {
             "label": "ninja",
             "type": "shell",
             "command": "time -p ninja -j8",
-            "group": "build",
             "problemMatcher": [
                 "$gcc"
-            ]
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true                        // <-- this line
+            }
+        },
+        {
+            "label": "run",
+            "type": "shell",
+            "command": "bin/pcl_viewer",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true                        // <-- this line
+            }
         }
     ]
 }

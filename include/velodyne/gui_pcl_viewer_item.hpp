@@ -52,6 +52,7 @@ namespace velodyne {
         QGridLayout *layout;
         QLabel *nameLabel;
         QPushButton *colorButton;
+        QPushButton *modeButton;
         QCheckBox *checkBox;
 
         GUIPCLViewerItemT item;
@@ -129,8 +130,12 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
         case 2:
             delete colorButton;
             colorButton = nullptr;
+            modeButton = new QPushButton(this);
             mediaTool = new MediaWidget(boost::get<PcapCachePtrT>(this->item)->beg, boost::get<PcapCachePtrT>(this->item)->totalFrame-1, this);
-            this->layout->addWidget(mediaTool, 0, 2);
+            layout->addWidget(mediaTool, 0, 2);
+            layout->addWidget(modeButton, 0, 3);
+            
+            connect(modeButton, &QPushButton::clicked, std::bind(&PcapCache::nextMode, boost::get<PcapCachePtrT>(this->item)));
             break;
     }
 }

@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/bin/pcl_viewer",
             "args": [],
-            "stopAtEntry": true,
+            "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [],
             "externalConsole": false,

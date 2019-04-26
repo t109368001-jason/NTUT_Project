@@ -37,13 +37,13 @@ namespace velodyne {
             PointCloudPtrT back;
             int backNumber;
             int compareFrameNumber;
+            int mode;
             double resolution;
-            bool showBack;
             bool converted;
             bool backChange;
 
-            PcapCache() : outputPath("/tmp/pcapCache/"), showBack(true), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
-            PcapCache(std::string outputPath) : outputPath(outputPath + "/"), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+            PcapCache() : outputPath("/tmp/pcapCache/"), mode(0), backChange(false), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+            PcapCache(std::string outputPath) : outputPath(outputPath + "/"), mode(0), backChange(false), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
 
             void addBack(int backNumber, int compareFrameNumber,  double resolution) {
                 this->backNumber = backNumber;
@@ -140,13 +140,31 @@ namespace velodyne {
                 return cloud;
             }
 
-            void showback (bool showBack){
-                this->showBack = showBack;
+            void nextMode() {
+                mode = (mode>=2) ?  0 : (mode + 1);
+            }
+
+            void showback(bool showBack) {
+                mode = (showBack) ? 0 : 1;
             }
 
             PointCloudPtrT get(int index) {
                 PointCloudPtrT cloud(new PointCloudT);
-                pcl::io::loadPCDFile<PointT>((showBack) ? outputPath.string() + std::to_string(index) + ".pcd" : outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
+                
+                switch(this->mode){
+                    case 0:
+                        pcl::io::loadPCDFile<PointT>(outputPath.string() + std::to_string(index) + ".pcd", *cloud);
+                        break;
+                    
+                    case 1:
+                        pcl::io::loadPCDFile<PointT>(outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
+                        break;
+
+                    case 2:
+                        pcl::io::loadPCDFile<PointT>(outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
+                        *cloud+=*getBack();
+                        break;
+                }
                 return cloud;
             }
 
@@ -312,7 +330,6 @@ namespace velodyne {
                 if((!exists())||(this->backChange)){
                     if(this->backNumber > 0)
                     {
-                        showBack = false;
                         if(!myFunction::fileExists(outputPath.string() + "/noBack/"))
                         {
                             mkdir((outputPath.string() + "/noBack/").c_str(), 0777);
@@ -325,7 +342,7 @@ namespace velodyne {
                         boost::function<void(const std::string file_name, const int begin, const int ended)> function =
                         [this] (const std::string file_name, const int begin, const int ended){
                                 myClass::backgroundSegmentation<PointT> b;                            
-                                b.setBackground(this->back, this->resolution);
+                                b.setBackground(this->back, 20.0);
 
                             for(int k = begin; k <= ended; k++){
                                 if(k >= this->totalFrame)break;
@@ -360,6 +377,7 @@ namespace velodyne {
 
                 saveConfig();
                 converted = true;
+                system(("chmod 777 " + outputPath.string() + " -R").c_str());
                 return true;
             }
 

@@ -198,7 +198,7 @@ void GUIPCLViewer::pointPickingEventOccurred(const pcl::visualization::PointPick
         item->addItem<PointPtrT>(pointPtr);
     } else {
         pickedPointsItemNames.push_back("picked points " + std::to_string(pickPointsCount) + " ");
-        item = addItem("picked points " + std::to_string(pickPointsCount) + " ", pointPtr);
+        item = addItem<PointPtrT>("picked points " + std::to_string(pickPointsCount) + " ", pointPtr);
     }
 
     PointCloudPtrT cloud(new PointCloudT);
