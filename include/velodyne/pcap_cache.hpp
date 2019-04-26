@@ -37,8 +37,8 @@ namespace velodyne {
             PointCloudPtrT back;
             int backNumber;
             int compareFrameNumber;
+            int mode;
             double resolution;
-            bool showBack;
             bool converted;
             bool backChange;
             int currentFrameId;
@@ -55,8 +55,6 @@ namespace velodyne {
             bool filesIsRun();
 
             PointCloudPtrT getCloudFromCapture();
-
-            void showback (bool showBack);
 
             PointCloudPtrT get(int index);
 
@@ -76,12 +74,14 @@ namespace velodyne {
 
             void getBackground ();
 
+            void nextMode();
+
             ~PcapCache();
     };
 }
 using namespace velodyne;
-PcapCache::PcapCache() : outputPath("/tmp/pcapCache/"), currentFrameId(0), showBack(true), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
-PcapCache::PcapCache(std::string outputPath) : outputPath(outputPath + "/"), showBack(true), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+PcapCache::PcapCache() : outputPath("/tmp/pcapCache/"), mode(0), backChange(false), currentFrameId(0), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+PcapCache::PcapCache(std::string outputPath) : outputPath(outputPath + "/"), mode(0), backChange(false), currentFrameId(0), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
 
 void PcapCache::addBack(int backNumber, int compareFrameNumber,  double resolution) {
     this->backNumber = backNumber;
@@ -178,14 +178,23 @@ PointCloudPtrT PcapCache::getCloudFromCapture() {
     return cloud;
 }
 
-void PcapCache::showback (bool showBack){
-    this->showBack = showBack;
-}
-
 PointCloudPtrT PcapCache::get(int index) {
     PointCloudPtrT cloud(new PointCloudT);
-    pcl::io::loadPCDFile<PointT>((showBack) ? outputPath.string() + std::to_string(index) + ".pcd" : outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
-    currentFrameId = index;
+    
+    switch(this->mode){
+        case 0:
+            pcl::io::loadPCDFile<PointT>(outputPath.string() + std::to_string(index) + ".pcd", *cloud);
+            break;
+        
+        case 1:
+            pcl::io::loadPCDFile<PointT>(outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
+            break;
+
+        case 2:
+            pcl::io::loadPCDFile<PointT>(outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
+            *cloud+=*getBack();
+            break;
+    }
     return cloud;
 }
 
@@ -291,6 +300,10 @@ void PcapCache::setRange(const uint64_t &beg, const uint64_t &end) {
     this->end = end;
 }
 
+void PcapCache::nextMode() {
+    mode = (mode>=2) ?  0 : (mode + 1);
+}
+
 bool PcapCache::convert() {
     if(!myFunction::fileExists(outputPath.string()))
     {
@@ -351,7 +364,6 @@ bool PcapCache::convert() {
     if((!exists())||(this->backChange)){
         if(this->backNumber > 0)
         {
-            showBack = false;
             if(!myFunction::fileExists(outputPath.string() + "/noBack/"))
             {
                 mkdir((outputPath.string() + "/noBack/").c_str(), 0777);
@@ -364,7 +376,7 @@ bool PcapCache::convert() {
             boost::function<void(const std::string file_name, const int begin, const int ended)> function =
             [this] (const std::string file_name, const int begin, const int ended){
                     myClass::backgroundSegmentation<PointT> b;                            
-                    b.setBackground(this->back, this->resolution);
+                    b.setBackground(this->back, 20.0);
 
                 for(int k = begin; k <= ended; k++){
                     if(k >= this->totalFrame)break;
@@ -395,10 +407,13 @@ bool PcapCache::convert() {
                 }
             }
         }
+    } else {
+        return true;
     }
 
     saveConfig();
     converted = true;
+    system(("chmod 777 " + outputPath.string() + " -R").c_str());
     return true;
 }
 

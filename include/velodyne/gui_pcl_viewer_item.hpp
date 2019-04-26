@@ -1,14 +1,14 @@
 #ifndef VELODYNE_GUI_PCL_VIEWER_ITEM_H_
 #define VELODYNE_GUI_PCL_VIEWER_ITEM_H_
+#include <QCheckBox>
+#include <QColorDialog>
 #include <QGridLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QCheckBox>
 #include <boost/variant.hpp>
+#include <pcl/visualization/pcl_visualizer.h>
 #include <velodyne/pcap_cache.hpp>
 #include <velodyne/media_widget.hpp>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <QColorDialog>
 
 namespace velodyne {
     typedef pcl::PointXYZ PointT;
@@ -50,6 +50,7 @@ namespace velodyne {
         QGridLayout *layout_;
         QLabel *nameLabel_;
         QPushButton *colorButton_;
+        QPushButton *modeButton_;
         QCheckBox *checkBox_;
         MediaWidget *mediaTool_;
 
@@ -68,7 +69,7 @@ namespace velodyne {
 }
 
 using namespace velodyne;
-GUIPCLViewerItem::GUIPCLViewerItem(QWidget *parent) : QWidget(parent), color_(Color{0xff, 0xff, 0xff, 0x00}), colorButton_(nullptr), mediaTool_(nullptr) {
+GUIPCLViewerItem::GUIPCLViewerItem(QWidget *parent) : QWidget(parent), color_(Color{0xff, 0xff, 0xff, 0x00}), colorButton_(nullptr), mediaTool_(nullptr), modeButton_(nullptr) {
     layout_ = new QGridLayout(this);
     nameLabel_ = new QLabel(this);
     checkBox_ = new QCheckBox("", this);
@@ -77,6 +78,10 @@ GUIPCLViewerItem::GUIPCLViewerItem(QWidget *parent) : QWidget(parent), color_(Co
 
     layout_->addWidget(checkBox_, 0, 0);
     layout_->addWidget(nameLabel_, 0, 2);
+    layout_->setContentsMargins(0,0,0,0);
+    
+    setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
+
     setLayout(layout_);
 
     connect(checkBox_, &QCheckBox::stateChanged, [this](){isChanged_ = true;});
@@ -97,6 +102,7 @@ void GUIPCLViewerItem::addItem(_ItemT &item) {
             std::copy(boost::get<PointCloudPtrT>(itemIn)->points.begin(), boost::get<PointCloudPtrT>(itemIn)->points.end(), std::back_inserter(boost::get<PointCloudPtrT>(item_)->points));
             boost::get<PointCloudPtrT>(item_)->width = static_cast<uint32_t>(boost::get<PointCloudPtrT>(item_)->points.size());
             boost::get<PointCloudPtrT>(item_)->height = 1;
+
             break;
     }
     isChanged_ = true;
@@ -112,6 +118,7 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
         case 1:
             if(!colorButton_) {
                 colorButton_ = new QPushButton(this);
+                colorButton_->setFixedSize(20,20);
                 colorButtonUpdateColor();
                 connect(colorButton_, &QPushButton::clicked, this, &GUIPCLViewerItem::colorButtonClicked);
                 layout_->addWidget(colorButton_, 0, 1);
@@ -119,6 +126,10 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
             if(mediaTool_) {
                 delete mediaTool_;
                 mediaTool_ = nullptr;
+            }
+            if(modeButton_) {
+                delete modeButton_;
+                modeButton_ = nullptr;
             }
             break;
         case 2:
@@ -129,6 +140,12 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
             if(!mediaTool_) {
                 mediaTool_ = new MediaWidget(boost::get<PcapCachePtrT>(item_)->beg, boost::get<PcapCachePtrT>(item_)->totalFrame-1, this);
                 layout_->addWidget(mediaTool_, 0, 3);
+            }
+            if(!modeButton_) {
+                modeButton_ = new QPushButton(this);
+                modeButton_->setFixedSize(20,20);
+                layout_->addWidget(modeButton_, 0, 1);
+                connect(modeButton_, &QPushButton::clicked, std::bind(&PcapCache::nextMode, boost::get<PcapCachePtrT>(this->item_)));
             }
             color_.data = 50;
             break;

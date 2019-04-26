@@ -126,12 +126,19 @@ void GUI::openFile(Mode mode) {
                 pcapFilenames.push_back(QFile::encodeName(filenames[i]).toStdString());
             }
 
-            boost::shared_ptr<PcapCache> pcapCache(new PcapCache("/home/xian-jie/Downloads/tmp/"));
+            int compareFrameNumber = 100;
+            double resolution = 10.0;
+            int backNumber = 1000000;
+
+            boost::filesystem::path outputDir(pcapFilenames[0]);
+            outputDir = outputDir.parent_path().string() + "/pcap_cache_data/";
+            boost::shared_ptr<PcapCache> pcapCache(new PcapCache(outputDir.string()));
             for(auto pcapFilename : pcapFilenames) {
                 pcapCache->add(pcapFilename, "default");
             }    
-
+            pcapCache->addBack(backNumber, compareFrameNumber, resolution);
             pcapCache->convert();
+            //pcapCache->showback(false);
 
             guiViewer->addItem<boost::shared_ptr<PcapCache>>("pcaps", pcapCache);
         }

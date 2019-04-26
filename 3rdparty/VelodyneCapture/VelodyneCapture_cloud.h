@@ -534,10 +534,6 @@ namespace velodyne
                         last_time.tv_sec++;
                     }
 
-                    const unsigned long long delay = ( ( header->ts.tv_sec - last_time.tv_sec ) * 1000000 ) + ( header->ts.tv_usec - last_time.tv_usec );
-                    #ifndef HAVE_FAST_PCAP
-                    std::this_thread::sleep_for( std::chrono::microseconds( delay ) );
-                    #endif
                     last_time = header->ts;
 
                     // Caluculate Interpolated Azimuth

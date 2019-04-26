@@ -20,12 +20,6 @@ namespace velodyne {
 
     class GUIPCLViewer : public QWidget {
     public:
-        myClass::MicroStopwatch tt1;
-        myClass::MicroStopwatch tt2;
-        myClass::MicroStopwatch tt3;
-        myClass::MicroStopwatch tt4;
-        myClass::MicroStopwatch tt5;
-
         ViewerPtrT viewer;
         QTimer *timer;
         QHBoxLayout *hLayout;
@@ -71,7 +65,7 @@ namespace velodyne {
 }
 
 using namespace velodyne;
-GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), pickedPointsCount(0), newpickedPointsItem(true), tt1("refresh"), tt2("refresh get"), tt3("refresh show") {
+GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), pickedPointsCount(0), newpickedPointsItem(true) {
     scrollArea = new QScrollArea(this);
     vLayoutWidget = new QWidget(this);
     hLayout = new QHBoxLayout(this);
@@ -86,8 +80,8 @@ GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), pickedPointsCount
     scrollArea->setWidget(vLayoutWidget);
     scrollArea->setWidgetResizable(true);
 
-    hLayout->addWidget(scrollArea, 25);
-    hLayout->addWidget(qvtk, 75);
+    hLayout->addWidget(scrollArea, 20);
+    hLayout->addWidget(qvtk, 80);
 
     viewer.reset(new pcl::visualization::PCLVisualizer( "Velodyne Viewer", false));
     viewer->registerKeyboardCallback(&GUIPCLViewer::keyboardEventOccurred, *this);
@@ -122,6 +116,7 @@ GUIPCLViewerItem * GUIPCLViewer::addItem(std::string name, _ItemT &item) {
     obj = new GUIPCLViewerItem(vLayoutWidget);
     obj->setItem<_ItemT>(name, item);
     vLayout->addRow(obj, delItem);
+    delItem->setFixedSize(20,20);
     connect(delItem, &QPushButton::clicked, std::bind(&GUIPCLViewer::deleteItem, this, name));
     if(this->items.size() == 0) {
         connect(timer, &QTimer::timeout, this, &GUIPCLViewer::refresh);
