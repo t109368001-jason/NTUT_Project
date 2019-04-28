@@ -31,13 +31,6 @@
 #include <iomanip>
 #include <algorithm>
 #include <functional>
-#ifdef HAVE_BOOST
-#include <boost/asio.hpp>
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/xml_parser.hpp>
-#include <pcl-1.8/pcl/point_cloud.h>
-#include <eigen3/Eigen/src/Core/Matrix.h>
-#endif
 #ifdef HAVE_PCAP
 #include <pcap.h>
 #endif
@@ -70,13 +63,6 @@ namespace velodyne
         typedef pcl::PointCloud<PointT> PointCloudT;
         typedef boost::shared_ptr<pcl::PointCloud<PointT>> PointCloudPtrT;
         protected:
-            #ifdef HAVE_BOOST
-            boost::asio::io_service ioservice;
-            boost::asio::ip::udp::socket* socket = nullptr;
-            boost::asio::ip::address address;
-            unsigned short port = 2368;
-            #endif
-
             #ifdef HAVE_PCAP
             pcap_t* pcap = nullptr;
             std::string filename = "";
@@ -90,6 +76,8 @@ namespace velodyne
 
             int MAX_NUM_LASERS;
             std::vector<double> lut;
+            std::vector<double> lut_cos;
+            std::vector<double> lut_sin;
 
             static const int LASER_PER_FIRING = 32;
             static const int FIRING_PER_PKT = 12;
@@ -123,14 +111,6 @@ namespace velodyne
             {
             };
 
-            #ifdef HAVE_BOOST
-            // Constructor ( direct capture from Sensor )
-            VelodyneCapture( const boost::asio::ip::address& address, const unsigned short port = 2368 )
-            {
-                open( address, port );
-            };
-            #endif
-
             #ifdef HAVE_PCAP
             // Constructor ( capture from PCAP )
             VelodyneCapture( const std::string& filename )
@@ -144,45 +124,6 @@ namespace velodyne
             {
                 close();
             };
-
-            #ifdef HAVE_BOOST
-            // Open Direct Capture from Sensor
-            const bool open( const boost::asio::ip::address& address, const unsigned short port = 2368 )
-            {
-                // Check Running
-                if( isRun() ){
-                    close();
-                }
-
-                // Set IP-Address and Port
-                this->address = ( !address.is_unspecified() ) ? address : boost::asio::ip::address::from_string( "255.255.255.255" );
-                this->port = port;
-
-                // Create Socket
-                try{
-                    socket = new boost::asio::ip::udp::socket( ioservice, boost::asio::ip::udp::endpoint( this->address, this->port ) );
-                }
-                catch( ... ){
-                    delete socket;
-                    socket = new boost::asio::ip::udp::socket( ioservice, boost::asio::ip::udp::endpoint( boost::asio::ip::address_v4::any(), this->port ) );
-                }
-
-                // Start IO-Service
-                try{
-                    ioservice.run();
-                }
-                catch( const std::exception& e ){
-                    std::cerr << e.what() << std::endl;
-                    return false;
-                }
-
-                // Start Capture Thread
-                run = true;
-                thread = new std::thread( std::bind( &VelodyneCapture::captureSensor, this ) );
-
-                return true;
-            };
-            #endif
 
             #ifdef HAVE_PCAP
             // Open Capture from PCAP
@@ -203,7 +144,6 @@ namespace velodyne
                 pcap_t* pcap = pcap_open_offline( filename.c_str(), error );
                 if( !pcap ){
                     throw std::runtime_error( error );
-                    std::cout << "AAAA" << std::endl;
                     return false;
                 }
 
@@ -212,13 +152,11 @@ namespace velodyne
                 std::ostringstream oss;
                 if( pcap_compile( pcap, &filter, oss.str().c_str(), 0, 0xffffffff ) == -1 ){
                     throw std::runtime_error( pcap_geterr( pcap ) );
-                    std::cout << "BBBB" << std::endl;
                     return false;
                 }
 
                 if( pcap_setfilter( pcap, &filter ) == -1 ){
                     throw std::runtime_error( pcap_geterr( pcap ) );
-                    std::cout << "CCCC" << std::endl;
                     return false;
                 }
 
@@ -238,16 +176,8 @@ namespace velodyne
             {
                 std::lock_guard<std::mutex> lock( mutex );
                 return (
-                    #if defined( HAVE_BOOST ) || defined( HAVE_PCAP )
-                    #ifdef HAVE_BOOST
-                    ( socket && socket->is_open() )
-                    #endif
-                    #if defined( HAVE_BOOST ) && defined( HAVE_PCAP )
-                    ||
-                    #endif
                     #ifdef HAVE_PCAP
                     pcap != nullptr
-                    #endif
                     #else
                     false
                     #endif
@@ -265,31 +195,18 @@ namespace velodyne
             // Close Capture
             void close()
             {
-                std::lock_guard<std::mutex> lock( mutex );
                 run = false;
                 // Close Capturte Thread
-                if( thread && thread->joinable() ){
-                    thread->join();
-                    thread->~thread();
-                    delete thread;
-                    thread = nullptr;
-                }
-
-                #ifdef HAVE_BOOST
-                // Close Socket
-                if( socket && socket->is_open() ){
-                    socket->close();
-                    delete socket;
-                    socket = nullptr;
-                }
-
-                // Stop IO-Service
-                if( ioservice.stopped() ){
-                    ioservice.stop();
-                    ioservice.reset();
-                }
-                #endif
-
+                while( thread ) {
+                    if(thread->joinable()) {
+                        thread->join();
+                        thread->~thread();
+                        delete thread;
+                        thread = nullptr;
+                    }
+                    std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
+                };
+                
                 #ifdef HAVE_PCAP
                 // Close PCAP
                 if( pcap ){
@@ -299,6 +216,7 @@ namespace velodyne
                 }
                 #endif
 
+                std::lock_guard<std::mutex> lock( mutex );
                 // Clear Queue
                 std::queue<PointCloudPtrT>().swap( queue );
             };
@@ -309,7 +227,7 @@ namespace velodyne
                 // Pop One Rotation Data from Queue
                 if( mutex.try_lock() ){
                     if( !queue.empty() ){
-                        cloud = queue.front();
+                        cloud = std::move(queue.front());
                         queue.pop();
                     }
                     mutex.unlock();
@@ -319,17 +237,16 @@ namespace velodyne
             // Retrieve Capture Data
             void retrieve_block( PointCloudPtrT& cloud )
             {
-                // Pop One Rotation Data from Queue
-                while(isRun())
-                {
-                    if(queue.size() > 0) break;
-                }
-                if( mutex.try_lock() ){
-                    if( !queue.empty() ){
-                        cloud = queue.front();
+                while(true) {
+                    if(getQueueSize() == 0) {
+                        if(!run) break;
+                    } else {
+                        std::lock_guard<std::mutex> lock( mutex );
+                        cloud = std::move(queue.front());
                         queue.pop();
+                        break;;
                     }
-                    mutex.unlock();
+                    std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
                 }
             };
 
@@ -347,146 +264,14 @@ namespace velodyne
             }
 
         private:
-            #ifdef HAVE_BOOST
-            // Capture Thread from Sensor
-            void captureSensor()
-            {
-                struct timeval last_time = { 0 };
-                double last_azimuth = 0.0;
-                PointCloudPtrT cloud;
-                unsigned char data[1500];
-                boost::asio::ip::udp::endpoint sender;
-
-                cloud.reset(new PointCloudT());
-                while( socket->is_open() && ioservice.stopped() && run ){
-                    // Receive Packet
-                    boost::system::error_code error;
-                    const size_t length = socket->receive_from( boost::asio::buffer( data, sizeof( data ) ), sender, 0, error );
-                    if( error == boost::asio::error::eof ){
-                        break;
-                    }
-
-                    // Check IP-Address and Port
-                    if( sender.address() != address && sender.port() != port ){
-                        continue;
-                    }
-
-                    // Check Packet Data Size
-                    // Data Blocks ( 100 bytes * 12 blocks ) + Time Stamp ( 4 bytes ) + Factory ( 2 bytes )
-                    if( length != 1206 ){
-                        continue;
-                    }
-
-                    // Retrieve Unix Time ( microseconds )
-                    const std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-                    const std::chrono::microseconds epoch = std::chrono::duration_cast<std::chrono::microseconds>( now.time_since_epoch() );
-                    const long long unixtime = epoch.count();
-
-                    // Convert to DataPacket Structure
-                    // Sensor Type 0x21 is HDL-32E, 0x22 is VLP-16
-                    const DataPacket* packet = reinterpret_cast<const DataPacket*>( data );
-                    assert( packet->sensorType == 0x21 || packet->sensorType == 0x22 );
-
-                    // Caluculate Interpolated Azimuth
-                    double interpolated = 0.0;
-                    if( packet->firingData[1].rotationalPosition < packet->firingData[0].rotationalPosition ){
-                        interpolated = ( ( packet->firingData[1].rotationalPosition + 36000 ) - packet->firingData[0].rotationalPosition ) / 2.0;
-                    }
-                    else{
-                        interpolated = ( packet->firingData[1].rotationalPosition - packet->firingData[0].rotationalPosition ) / 2.0;
-                    }
-
-                    // Processing Packet
-                    for( int firing_index = 0; firing_index < FIRING_PER_PKT; firing_index++ ){
-                        // Retrieve Firing Data
-                        const FiringData firing_data = packet->firingData[firing_index];
-                        for( int laser_index = 0; laser_index < LASER_PER_FIRING; laser_index++ ){
-                            // Retrieve Rotation Azimuth
-                            double azimuth = static_cast<double>( firing_data.rotationalPosition );
-
-                            // Interpolate Rotation Azimuth
-                            if( laser_index >= MAX_NUM_LASERS )
-                            {
-                                azimuth += interpolated;
-                            }
-
-                            // Reset Rotation Azimuth
-                            if( azimuth >= 36000 )
-                            {
-                                azimuth -= 36000;
-                            }
-
-                            // Complete Retrieve Capture One Rotation Data
-                            #ifndef PUSH_SINGLE_PACKETS
-                            if( last_azimuth > azimuth ){
-                                // Push One Rotation Data to Queue
-                                cloud->width = static_cast<uint32_t>(cloud->points.size());
-                                cloud->height = 1;
-                                mutex.lock();
-                                queue.push( cloud );
-                                mutex.unlock();
-                                cloud.reset(new PointCloudT());
-                                #ifdef MAX_QUEUE_SIZE
-                                while(!(queue.size() < MAX_QUEUE_SIZE)) {
-                                    std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
-                                }
-                                #endif
-                            }
-                            #endif
-                            #ifdef NO_EMPTY_RETURNS
-                            if( firing_data.laserReturns[laser_index % MAX_NUM_LASERS].distance < EPSILON ){
-                              continue;
-                            }
-                            #endif
-                            Laser laser;
-                            laser.azimuth = azimuth / 100.0;
-                            laser.vertical = lut[laser_index % MAX_NUM_LASERS];
-                            #ifdef USE_MILLIMETERS
-                            laser.distance = firing_data.laserReturns[laser_index % MAX_NUM_LASERS].distance * 2.0;
-                            #else
-                            laser.distance = firing_data.laserReturns[laser_index % MAX_NUM_LASERS].distance * 2.0 / 10;
-                            #endif
-                            laser.intensity = firing_data.laserReturns[laser_index % MAX_NUM_LASERS].intensity;
-                            laser.id = static_cast<unsigned char>( laser_index % MAX_NUM_LASERS );
-                            #ifdef HAVE_GPSTIME
-                            laser.time = packet->gpsTimestamp;
-                            #else
-                            laser.time = unixtime;
-                            #endif
-
-                            PointT p;
-                            p.x = static_cast<float>( ( laser.distance * std::cos( laser.vertical * M_PI / 180.0 ) ) * std::sin( laser.azimuth  * M_PI / 180.0 ) );
-                            p.y = static_cast<float>( ( laser.distance * std::cos( laser.vertical * M_PI / 180.0 ) ) * std::cos( laser.azimuth  * M_PI / 180.0 ) );
-                            p.z = static_cast<float>( ( laser.distance * std::sin( laser.vertical * M_PI / 180.0 ) ) );
-                        
-                            // Update Last Rotation Azimuth
-                            last_azimuth = azimuth;
-                            if( (p.x == 0.0f) && (p.y == 0.0f) && (p.z == 0.0f) ){
-                                continue;
-                            }
-
-                            cloud->points.push_back( p );
-                        }
-                    }
-                    #ifdef PUSH_SINGLE_PACKETS
-                    // Push packet after processing
-                    mutex.lock();
-                    queue.push( std::move( cloud ) );
-                    mutex.unlock();
-                    cloud.reset(new PointCloudT());
-                    #endif
-                }
-                run = false;
-            };
-            #endif
-
             #ifdef HAVE_PCAP
             // Capture Thread from PCAP
             void capturePCAP()
             {
-                struct timeval last_time = { 0 };
                 double last_azimuth = 0.0;
+
                 PointCloudPtrT cloud;
+                double M_PI_18000 = M_PI / 18000.0;
                 float matrix[4][4];
                 if(transformMatrixPtr) {
                     for(int i = 0; i < 4; i++) {
@@ -522,20 +307,6 @@ namespace velodyne
                     const DataPacket* packet = reinterpret_cast<const DataPacket*>( data + 42 );
                     assert( packet->sensorType == 0x21 || packet->sensorType == 0x22 );
 
-                    // Wait This Thread Difference Time
-                    if( last_time.tv_sec == 0 )
-                    {
-                        last_time = header->ts;
-                    }
-
-                    if( last_time.tv_usec > header->ts.tv_usec )
-                    {
-                        last_time.tv_usec -= 1000000;
-                        last_time.tv_sec++;
-                    }
-
-                    last_time = header->ts;
-
                     // Caluculate Interpolated Azimuth
                     double interpolated = 0.0;
                     if( packet->firingData[1].rotationalPosition < packet->firingData[0].rotationalPosition ){
@@ -553,6 +324,8 @@ namespace velodyne
                             // Retrieve Rotation Azimuth
                             double azimuth = static_cast<double>( firing_data.rotationalPosition );
 
+                            int laser_index_modulus = laser_index % MAX_NUM_LASERS;
+
                             // Interpolate Rotation Azimuth
                             if( laser_index >= MAX_NUM_LASERS )
                             {
@@ -566,56 +339,42 @@ namespace velodyne
                             }
 
                             // Complete Retrieve Capture One Rotation Data
-                            #ifndef PUSH_SINGLE_PACKETS
                             if( last_azimuth > azimuth ){
                                 // Push One Rotation Data to Queue
-                                cloud->width = static_cast<uint32_t>(cloud->points.size());
+                                cloud->header.stamp = unixtime;
+                                cloud->width = static_cast<uint32_t>( cloud->points.size() );
                                 cloud->height = 1;
                                 mutex.lock();
                                 queue.push( cloud );
                                 mutex.unlock();
                                 cloud.reset(new PointCloudT());
                                 #ifdef MAX_QUEUE_SIZE
-                                while(!(queue.size() < MAX_QUEUE_SIZE)) {
+                                while(run && !(getQueueSize() < MAX_QUEUE_SIZE)) {
                                     std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
                                 }
                                 #endif
                             }
-                            #endif
-                            #ifdef NO_EMPTY_RETURNS
-                            if( firing_data.laserReturns[laser_index % MAX_NUM_LASERS].distance < EPSILON ){
-                              continue;
-                            }
-                            #endif
-                            Laser laser;
-                            laser.azimuth = azimuth / 100.0;
-                            laser.vertical = lut[laser_index % MAX_NUM_LASERS];
-                            #ifdef USE_MILLIMETERS
-                            laser.distance = firing_data.laserReturns[laser_index % MAX_NUM_LASERS].distance * 2.0;
-                            #else
-                            laser.distance = firing_data.laserReturns[laser_index % MAX_NUM_LASERS].distance * 2.0 / 10;
-                            #endif
-                            laser.intensity = firing_data.laserReturns[laser_index % MAX_NUM_LASERS].intensity;
-                            laser.id = static_cast<unsigned char>( laser_index % MAX_NUM_LASERS );
-                            #ifdef HAVE_GPSTIME
-                            laser.time = packet->gpsTimestamp;
-                            #else
-                            laser.time = unixtime;
-                            #endif
-
-                            // Update Last Rotation Azimuth
-                            last_azimuth = azimuth;
-                            /*if( (p.x == 0.0f) && (p.y == 0.0f) && (p.z == 0.0f) ){
+                            if( firing_data.laserReturns[laser_index_modulus].distance < EPSILON ){
                                 continue;
-                            }*/
+                            }
+                            //Laser laser;
+                            //laser.azimuth = azimuth / 100.0;
+                            //laser.vertical = lut[laser_index_modulus];
+                            //laser.distance = firing_data.laserReturns[laser_index_modulus].distance * 2.0;
 
+                            //not used
+                            //laser.intensity = firing_data.laserReturns[laser_index_modulus].intensity;
+                            //laser.id = static_cast<unsigned char>( laser_index_modulus );
+                            //#ifdef HAVE_GPSTIME
+                            //laser.time = packet->gpsTimestamp;
+                            //#else
+                            //laser.time = unixtime;
+                            //#endif
                             PointT p1,p2;
-                            p1.x = static_cast<float>( ( laser.distance * std::cos( laser.vertical * M_PI / 180.0 ) ) * std::sin( laser.azimuth  * M_PI / 180.0 ) );
-                            p1.y = static_cast<float>( ( laser.distance * std::cos( laser.vertical * M_PI / 180.0 ) ) * std::cos( laser.azimuth  * M_PI / 180.0 ) );
-                            p1.z = static_cast<float>( ( laser.distance * std::sin( laser.vertical * M_PI / 180.0 ) ) );
+                            p1.x = static_cast<float>( ( firing_data.laserReturns[laser_index_modulus].distance * 2.0 * lut_cos[laser_index_modulus] ) * std::sin( azimuth * M_PI_18000 ) );
+                            p1.y = static_cast<float>( ( firing_data.laserReturns[laser_index_modulus].distance * 2.0 * lut_cos[laser_index_modulus] ) * std::cos( azimuth * M_PI_18000 ) );
+                            p1.z = static_cast<float>( ( firing_data.laserReturns[laser_index_modulus].distance * 2.0 * lut_sin[laser_index_modulus] ) );
                         
-                            if( p1.x == 0.0f && p1.y == 0.0f && p1.z == 0.0f ) continue;
-
                             if(transformMatrixPtr) {
                                 p2.x = static_cast<float>( matrix[0][0] * p1.x + matrix[0][1] * p1.y + matrix[0][2] * p1.z + matrix[0][3] );
                                 p2.y = static_cast<float>( matrix[1][0] * p1.x + matrix[1][1] * p1.y + matrix[1][2] * p1.z + matrix[1][3] );
@@ -624,15 +383,12 @@ namespace velodyne
                             }
 
                             cloud->points.push_back( p1 );
+
+                            // Update Last Rotation Azimuth
+                            last_azimuth = azimuth;
+
                         }
                     }
-                    #ifdef PUSH_SINGLE_PACKETS
-                    // Push packet after processing
-                    mutex.lock();
-                    queue.push( cloud );
-                    mutex.unlock();
-                    cloud.reset(new PointCloudT());
-                    #endif
                 }
 
                 run = false;
@@ -646,19 +402,14 @@ namespace velodyne
         private:
             static const int MAX_NUM_LASERS = 16;
             const std::vector<double> lut = { -15.0, 1.0, -13.0, 3.0, -11.0, 5.0, -9.0, 7.0, -7.0, 9.0, -5.0, 11.0, -3.0, 13.0, -1.0, 15.0 };
+            std::vector<double> lut_cos = { -15.0, 1.0, -13.0, 3.0, -11.0, 5.0, -9.0, 7.0, -7.0, 9.0, -5.0, 11.0, -3.0, 13.0, -1.0, 15.0 };
+            std::vector<double> lut_sin = { -15.0, 1.0, -13.0, 3.0, -11.0, 5.0, -9.0, 7.0, -7.0, 9.0, -5.0, 11.0, -3.0, 13.0, -1.0, 15.0 };
 
         public:
             VLP16Capture() : VelodyneCapture<PointT>()
             {
                 initialize();
             };
-
-            #ifdef HAVE_BOOST
-            VLP16Capture( const boost::asio::ip::address& address, const unsigned short port = 2368 ) : VelodyneCapture<PointT>( address, port )
-            {
-                initialize();
-            };
-            #endif
 
             #ifdef HAVE_PCAP
             VLP16Capture( const std::string& filename ) : VelodyneCapture<PointT>( filename )
@@ -674,8 +425,12 @@ namespace velodyne
         private:
             void initialize()
             {
+                std::transform(lut.begin(), lut.end(), lut_cos.begin(), [](auto &a){return std::cos( a * M_PI / 180.0); });
+                std::transform(lut.begin(), lut.end(), lut_sin.begin(), [](auto &a){return std::sin( a * M_PI / 180.0); });
                 VelodyneCapture<PointT>::MAX_NUM_LASERS = MAX_NUM_LASERS;
                 VelodyneCapture<PointT>::lut = lut;
+                VelodyneCapture<PointT>::lut_cos = lut_cos;
+                VelodyneCapture<PointT>::lut_sin = lut_sin;
             };
     };
 
@@ -691,13 +446,6 @@ namespace velodyne
             {
                 initialize();
             };
-
-            #ifdef HAVE_BOOST
-            HDL32ECapture( const boost::asio::ip::address& address, const unsigned short port = 2368 ) : VelodyneCapture<PointT>( address, port )
-            {
-                initialize();
-            };
-            #endif
 
             #ifdef HAVE_PCAP
             HDL32ECapture( const std::string& filename ) : VelodyneCapture<PointT>( filename )

@@ -165,14 +165,14 @@ void GUIPCLViewerItem::updateView(ViewerPtrT &viewer) {
                 if(boost::get<PointsT>(item_).size() > 1) {
                     PointT p1 = boost::get<PointsT>(item_).front();
                     PointT p2 = boost::get<PointsT>(item_).back();
-                    double d = std::sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z))/100.0;
+                    double d = std::sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z))/1000.0;
                     nameLabel_->setText((name_ + "(" + std::to_string(d) + " m)").c_str());
                     viewer->addLine(p1, p2, double(color_.r)/255.0, double(color_.g)/255.0, double(color_.b)/255.0, name_);
                 }
             } else if(item_.which() == 1) {
                 myFunction::updateCloud(viewer, boost::get<PointCloudPtrT>(item_), name_, color_.r, color_.g, color_.b);
             } else {
-                myFunction::updateCloud(viewer, boost::get<PcapCachePtrT>(item_)->get(mediaTool_->getFrameId()), name_, double(color_.data) * 100.0);
+                myFunction::updateCloud(viewer, boost::get<PcapCachePtrT>(item_)->get(mediaTool_->getFrameId()), name_, double(color_.data) * 1000.0);
             }
         }
         isChanged_ = false;

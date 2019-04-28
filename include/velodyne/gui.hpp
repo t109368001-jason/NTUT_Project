@@ -127,7 +127,7 @@ void GUI::openFile(Mode mode) {
             }
 
             int compareFrameNumber = 100;
-            double resolution = 10.0;
+            double resolution = 100.0;
             int backNumber = 1000000;
 
             boost::filesystem::path outputDir(pcapFilenames[0]);
@@ -136,7 +136,7 @@ void GUI::openFile(Mode mode) {
             for(auto pcapFilename : pcapFilenames) {
                 pcapCache->add(pcapFilename, "default");
             }    
-            pcapCache->addBack(backNumber, compareFrameNumber, resolution);
+            //pcapCache->addBack(backNumber, compareFrameNumber, resolution);
             pcapCache->convert();
             //pcapCache->showback(false);
 

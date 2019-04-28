@@ -1,4 +1,5 @@
 {
+    "codegnuglobal.executable": "/usr/bin/global.exe",
     "editor.quickSuggestionsDelay": 100,
     "files.associations": {
         "system_error": "cpp",

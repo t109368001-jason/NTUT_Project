@@ -1,15 +1,14 @@
 #ifndef PCAP_CACHER_H_
 #define PCAP_CACHER_H_
 
-#define HAVE_BOOST
 #define HAVE_PCAP
 #define HAVE_FAST_PCAP
 #ifndef MAX_QUEUE_SIZE
 #define MAX_QUEUE_SIZE 100
 #endif
 
-#include <pcl-1.8/pcl/io/pcd_io.h>
-#include <pcl-1.8/pcl/registration/transforms.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/registration/transforms.h>
 #include <VelodyneCapture/VelodyneCapture_cloud.h>
 #include <basic_function.hpp>
 #include <backgroundSegmentation.hpp>
@@ -75,6 +74,8 @@ namespace velodyne {
             void getBackground ();
 
             void nextMode();
+
+            void close();
 
             ~PcapCache();
     };
@@ -163,17 +164,19 @@ bool PcapCache::filesIsRun() {
 }
 
 PointCloudPtrT PcapCache::getCloudFromCapture() {
-    PointCloudPtrT cloud;
-    if(filesIsRun()) {
-        cloud.reset(new PointCloudT());
-        std::cout << "\033[1G";
-        for(auto &file : this->files) {
-            PointCloudPtrT temp;
-            temp.reset(new PointCloudT());
-            file->vlp16.retrieve_block(temp);
+    PointCloudPtrT cloud(new PointCloudT());
+    std::cout << "\033[0G";
+    for(auto &file : this->files) {
+        PointCloudPtrT temp = nullptr;
+        file->vlp16.retrieve_block(temp);
+        if(temp) {
             *cloud += *temp;
-            std:: cout << std::setw(3) << file->vlp16.getQueueSize() << '\t';
+
+        } else {
+            close();
+            return nullptr;
         }
+        std:: cout << std::setw(3) << std::left << file->vlp16.getQueueSize() << '\t';
     }
     return cloud;
 }
@@ -322,17 +325,19 @@ bool PcapCache::convert() {
             };
         
         std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
+
+        myClass::MicroStopwatch tt1("getCloudFromCapture");
+
         while(filesIsRun()&&(totalFrame < end)) {
             
             for(auto &thread : ts) {
-                
-                if((!filesIsRun())||(totalFrame >= end)) {
+                PointCloudPtrT cloud = nullptr;
+                tt1.start();
+                if(((cloud = getCloudFromCapture())==nullptr)||(totalFrame >= end)) {
                     break;
                 }
-                PointCloudPtrT cloud;
-                while((cloud ? cloud->points.size() == 0 : true)) {
-                    cloud = getCloudFromCapture();
-                }
+                tt1.pause();
+
                 if(thread)
                 {
                     if( thread->joinable() ){
@@ -345,10 +350,11 @@ bool PcapCache::convert() {
                 } else {
                     thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", cloud));
                 }
-                std::cout << totalFrame << "\033[5G" << std::flush;
+                std::cout << totalFrame << "\033[0G" << std::flush;
                 totalFrame++;
             }
         }
+        tt1.toc();
         std::cout << std::endl << "Complete! total: " << totalFrame << " frame" << std::endl;
         for(auto &thread : ts) {
             if(thread) {
@@ -386,7 +392,7 @@ bool PcapCache::convert() {
 
                     temp = b.compute(temp);
                     pcl::io::savePCDFileBinaryCompressed<PointT>(file_name + "/noBack/" + std::to_string(k) + ".pcd", *temp);
-                    std::cout << k << "\033[5G" << std::flush;
+                    std::cout << k << "\033[0G" << std::flush;
                 }
             };
 
@@ -438,8 +444,8 @@ void PcapCache::getBackground ()
         boost::shared_ptr<pcl::PointCloud<PointT>> temp1(new pcl::PointCloud<PointT>());
         temp = myFunction::getNoChanges<PointT>(this->get(i), this->get(i+(jump*d)), this->resolution);
         temp1 = myFunction::getNoChanges<PointT>(this->get(i+(jump*d)), this->get(i), this->resolution);
-        temp = myFunction::getChanges<PointT>(backs[j], temp, 1.0);
-        temp1 = myFunction::getChanges<PointT>(backs[j], temp1, 1.0);
+        temp = myFunction::getChanges<PointT>(backs[j], temp, 10.0);
+        temp1 = myFunction::getChanges<PointT>(backs[j], temp1, 10.0);
         *backs[j] += *temp;
         *backs[j] += *temp1;
     };
@@ -495,9 +501,12 @@ void PcapCache::getBackground ()
     this->back = back;
 }
 
-PcapCache::~PcapCache() {
-    for(auto &file : files) {
+void PcapCache::close() {
+    for(auto &file : this->files) {
         file->vlp16.close();
     }
+}
+PcapCache::~PcapCache() {
+    close();
 }
 #endif

@@ -68,7 +68,10 @@ void MicroStopwatch::start() {
         elapsed = 0;
         stoped_ = false;
     }
-    if(paused_) tictic_ = boost::posix_time::microsec_clock::local_time ();
+    if(paused_) {
+        paused_ = false;
+        tictic_ = boost::posix_time::microsec_clock::local_time ();
+    }
 }
 
 void MicroStopwatch::restart() {
