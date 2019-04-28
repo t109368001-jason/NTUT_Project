@@ -12,85 +12,105 @@
 #include <VelodyneCapture/VelodyneCapture_cloud.h>
 #include <basic_function.hpp>
 #include <backgroundSegmentation.hpp>
+#include <nlohmann/json.hpp>
 
 namespace velodyne {
-    typedef pcl::PointXYZ PointT;
     
     class VLP16 {
+        typedef pcl::PointXYZ PointT;
         public:
             VLP16Capture<PointT> vlp16;
             std::string pcapFilename;
-            uint64_t frameOffset;
+            int frameOffset;
             boost::shared_ptr<Eigen::Matrix4f> transformMatrixPtr;
     };
 
 
     class PcapCache {
+        typedef pcl::PointXYZ PointT;
         typedef pcl::PointCloud<PointT> PointCloudT;
         typedef boost::shared_ptr<PointCloudT> PointCloudPtrT;
 
         public:
-            boost::filesystem::path outputPath;
-            std::vector<boost::shared_ptr<VLP16>> files;
-            uint64_t beg, end, totalFrame;
-            PointCloudPtrT back;
-            int backNumber;
-            int compareFrameNumber;
-            int mode;
-            double resolution;
-            bool converted;
-            bool backChange;
-            int currentFrameId;
-
             PcapCache();
             PcapCache(std::string outputPath);
             
-            void addBack(int backNumber, int compareFrameNumber,  double resolution);
+            void addPcap(const std::string &pcapFilename, const int &frameOffset = 0, const boost::shared_ptr<Eigen::Matrix4f> &transformMatrixPtr = nullptr);
+            void addPcap(const std::string &pcapFilename, const std::string &configFilename);
+            void close();
+            void convert();
 
-            bool add(const std::string &pcapFilename, const int64_t &frameOffset = 0, const boost::shared_ptr<Eigen::Matrix4f> &transformMatrixPtr = nullptr);
+            void setRange(const int &beg = 0, const int &end = std::numeric_limits<int>::max());
+            void setBackgroundParameters(int backNumber, int compareFrameNumber,  double resolution);
 
-            bool add(const std::string &pcapFilename, const std::string &configFilename);
-
-            bool filesIsRun();
-
-            PointCloudPtrT getCloudFromCapture();
-
-            PointCloudPtrT get(int index);
-
-            void saveConfig();
-
-            std::string getConfigString();
-
-            std::string loadConfigString();
-
-            bool exists();
-
-            void setRange(const uint64_t &beg = 0, const uint64_t &end = std::numeric_limits<uint64_t>::max());
-
-            bool convert();
-
-            boost::shared_ptr<pcl::PointCloud<PointT>> getBack();
-
-            void getBackground ();
+            PointCloudPtrT getCloudById(int index);
 
             void nextMode();
 
-            void close();
+            int beg();
+            int end();
+            int frameSize();
+            int currentFrameId();
 
             ~PcapCache();
+
+        private:
+            boost::filesystem::path outputPath_;
+            std::vector<boost::shared_ptr<VLP16>> files_;
+            int beg_, end_, currentFrameId_;
+            int backNumber_;
+            int compareFrameNumber_;
+            int mode_;
+            double resolution_;
+            bool converted_;
+            bool backChange_;
+
+            bool capturesIsRun();
+
+            PointCloudPtrT getCloudFromCapture();
+
+            int getMaxFrameSize();
+
+            void saveConfig();
+
+            nlohmann::json getConfigJson();
+            nlohmann::json loadConfigJson();
+
+            bool exists();
+
+            PointCloudPtrT getBackgroundCloud();
+
+            PointCloudPtrT computeBackground();
+
     };
 }
 using namespace velodyne;
-PcapCache::PcapCache() : outputPath("/tmp/pcapCache/"), mode(0), backChange(false), currentFrameId(0), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
-PcapCache::PcapCache(std::string outputPath) : outputPath(outputPath + "/"), mode(0), backChange(false), currentFrameId(0), backNumber(0), beg(0), end(std::numeric_limits<uint64_t>::max()), totalFrame(0), converted(false) { };
+PcapCache::PcapCache() : outputPath_("/tmp/pcapCache/"), mode_(0), backChange_(false), backNumber_(0), beg_(0), end_(std::numeric_limits<int>::max()), converted_(false) { };
+PcapCache::PcapCache(std::string outputPath_) : outputPath_(outputPath_ + "/"), mode_(0), backChange_(false), backNumber_(0), beg_(0), end_(std::numeric_limits<int>::max()), converted_(false) { };
 
-void PcapCache::addBack(int backNumber, int compareFrameNumber,  double resolution) {
-    this->backNumber = backNumber;
-    this->compareFrameNumber = compareFrameNumber;
-    this->resolution = resolution;
+void PcapCache::setBackgroundParameters(int backNumber, int compareFrameNumber,  double resolution) {
+    backNumber_ = backNumber;
+    compareFrameNumber_ = compareFrameNumber;
+    resolution_ = resolution;
 }
 
-bool PcapCache::add(const std::string &pcapFilename, const int64_t &frameOffset, const boost::shared_ptr<Eigen::Matrix4f> &transformMatrixPtr) {
+inline int PcapCache::beg() {
+    return beg_;
+}
+
+inline int PcapCache::end() {
+    return end_;
+}
+
+inline int PcapCache::currentFrameId() {
+    return currentFrameId_;
+}
+
+inline int PcapCache::frameSize() {
+    return end_ - beg_ + 1;
+}
+
+void PcapCache::addPcap(const std::string &pcapFilename, const int &frameOffset, const boost::shared_ptr<Eigen::Matrix4f> &transformMatrixPtr) {
     boost::shared_ptr<VLP16> file;
     file.reset(new VLP16);
 
@@ -100,36 +120,31 @@ bool PcapCache::add(const std::string &pcapFilename, const int64_t &frameOffset,
     if(transformMatrixPtr) {
         if(!file->vlp16.open(file->pcapFilename, *transformMatrixPtr))
         {
-            std::cout << std::endl << "Error : load " << file->pcapFilename << " failed" << std::endl;
-            return false;
+            throw std::runtime_error("Error : load " + file->pcapFilename + " failed");
         }
         file->transformMatrixPtr = transformMatrixPtr;
     } else {
         if(!file->vlp16.open(file->pcapFilename))
         {
-            std::cout << std::endl << "Error : load " << file->pcapFilename << " failed" << std::endl;
-            return false;
+            throw std::runtime_error("Error : load " + file->pcapFilename + " failed");
         }
     }
     if(!file->vlp16.isOpen())
     {
-        std::cout << std::endl << "Error : load " << file->pcapFilename << " failed" << std::endl;
-        return false;
+        throw std::runtime_error("Error : load " + file->pcapFilename + " failed");
     }
     std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
 
     PointCloudPtrT cloud;
-    for(int64_t i = 0; i < file->frameOffset; i++) {
+    for(int i = 0; i < file->frameOffset; i++) {
         cloud.reset(new PointCloudT);
         file->vlp16.retrieve_block(cloud);
     }
     
-    this->files.push_back(file);
-    
-    return true;
+    files_.push_back(file);
 }
 
-bool PcapCache::add(const std::string &pcapFilename, const std::string &configFilename) {
+void PcapCache::addPcap(const std::string &pcapFilename, const std::string &configFilename) {
     boost::filesystem::path configPath{configFilename};
     if(configFilename == "default") {
         configPath = pcapFilename;
@@ -137,7 +152,7 @@ bool PcapCache::add(const std::string &pcapFilename, const std::string &configFi
     }
 
     std::ifstream ifs(configPath.string());
-    int64_t frameOffset;
+    int frameOffset;
     boost::shared_ptr<Eigen::Matrix4f> transformMatrixPtr;
     transformMatrixPtr.reset(new Eigen::Matrix4f);
 
@@ -152,12 +167,12 @@ bool PcapCache::add(const std::string &pcapFilename, const std::string &configFi
         ifs >> s;
         frameOffset = std::stoll(s);
     }
-    return this->add(pcapFilename, frameOffset, transformMatrixPtr);
+    addPcap(pcapFilename, frameOffset, transformMatrixPtr);
 }
 
-bool PcapCache::filesIsRun() {
+bool PcapCache::capturesIsRun() {
     bool isRun = true;
-    for(auto &file : this->files) {
+    for(auto &file : files_) {
         isRun &= file->vlp16.isRun();
     }
     return isRun;
@@ -166,7 +181,7 @@ bool PcapCache::filesIsRun() {
 PointCloudPtrT PcapCache::getCloudFromCapture() {
     PointCloudPtrT cloud(new PointCloudT());
     std::cout << "\033[0G";
-    for(auto &file : this->files) {
+    for(auto &file : files_) {
         PointCloudPtrT temp = nullptr;
         file->vlp16.retrieve_block(temp);
         if(temp) {
@@ -181,269 +196,232 @@ PointCloudPtrT PcapCache::getCloudFromCapture() {
     return cloud;
 }
 
-PointCloudPtrT PcapCache::get(int index) {
+PointCloudPtrT PcapCache::getCloudById(int index) {
     PointCloudPtrT cloud(new PointCloudT);
-    
-    switch(this->mode){
+    currentFrameId_ = index;
+    switch(mode_){
         case 0:
-            pcl::io::loadPCDFile<PointT>(outputPath.string() + std::to_string(index) + ".pcd", *cloud);
+            pcl::io::loadPCDFile<PointT>(outputPath_.string() + std::to_string(currentFrameId_) + ".pcd", *cloud);
             break;
         
         case 1:
-            pcl::io::loadPCDFile<PointT>(outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
+            pcl::io::loadPCDFile<PointT>(outputPath_.string() + "/noBack/" + std::to_string(currentFrameId_) + ".pcd", *cloud);
             break;
 
         case 2:
-            pcl::io::loadPCDFile<PointT>(outputPath.string() + "/noBack/" + std::to_string(index) + ".pcd", *cloud);
-            *cloud+=*getBack();
+            pcl::io::loadPCDFile<PointT>(outputPath_.string() + "/noBack/" + std::to_string(currentFrameId_) + ".pcd", *cloud);
+            *cloud+=*getBackgroundCloud();
             break;
     }
     return cloud;
 }
 
+int PcapCache::getMaxFrameSize() {
+    int frameSize = std::numeric_limits<int>::max();
+    for(auto &file : files_) {
+        frameSize = std::min(frameSize, getFrameSize(file->pcapFilename)-file->frameOffset);
+    }
+    return frameSize;
+}
+
+nlohmann::json PcapCache::getConfigJson() {
+    nlohmann::json config;
+    config["beg"] = beg_;
+    config["end"] = std::min(end_, getMaxFrameSize()-1);
+    config["back"] = (backNumber_ > 0 ? "back_" + std::to_string(backNumber_) + ".pcd" : "");
+    for(int i = 0; i < files_.size(); i++) {
+        config["pcapFilename"+std::to_string(i)] = files_[i]->pcapFilename;
+        config["frameOffset"+std::to_string(i)] = files_[i]->frameOffset;
+        if(files_[i]->transformMatrixPtr) {
+            std::stringstream ss;
+            ss << *(files_[i]->transformMatrixPtr);
+            config["transformMatrix"+std::to_string(i)] = ss.str();
+        }
+    }
+    return config;
+}
+
 void PcapCache::saveConfig() {
-    std::ofstream ofs(outputPath.string() + "config.inf");
-
-    ofs << "totalFrame="<< this->totalFrame << std::endl;
-    ofs << "beg="<< this->beg << std::endl;
-    ofs << "end="<< this->end << std::endl;
-    ofs << "back=" << (back ? "back_" + std::to_string(this->backNumber) + ".pcd" : "") << std::endl;
-    for(auto file : files) {
-        ofs << "pcapFilename=" << file->pcapFilename << std::endl;
-        ofs << "frameOffset=" << file->frameOffset << std::endl;
-        std::stringstream ss;
-        if(file->transformMatrixPtr) {
-            ss << (*file->transformMatrixPtr);
-        }
-        ofs << "transformMatrix=" << ss.str() << std::endl;
-    }
+    std::ofstream ofs(outputPath_.string() + "config.json");
+    ofs << getConfigJson();
 }
 
-std::string PcapCache::getConfigString() {
-    std::stringstream ss;
-    ss << "totalFrame="<< this->totalFrame << std::endl;
-    ss << "beg="<< this->beg << std::endl;
-    ss << "end="<< this->end << std::endl;
-    ss << "back=" << (this->backNumber != 0 ? "back_" + std::to_string(this->backNumber) + ".pcd" : "") << std::endl;
-
-    for(auto file : files) {
-        ss << "pcapFilename=" << file->pcapFilename << std::endl;
-        ss << "frameOffset=" << file->frameOffset << std::endl;
-        std::stringstream sss;
-        if(file->transformMatrixPtr) {
-            sss << (*file->transformMatrixPtr);
-        }
-        ss << "transformMatrix=" << sss.str() << std::endl;
-    }
-    return ss.str();
-}
-
-std::string PcapCache::loadConfigString() {
-    if(!myFunction::fileExists(outputPath.string() + "config.inf"))
+nlohmann::json PcapCache::loadConfigJson() {
+    if(!myFunction::fileExists(outputPath_.string() + "config.json"))
     {
         return "";
     }
 
-    std::ifstream ifs(outputPath.string() + "config.inf");
-
-    /*std::stringstream ss;
-
-    while(!ifs.eof()) {
-        std::string s;
-        ifs >> s;
-        ss << s;
-        ss << std::endl;
-    }*/
+    std::ifstream ifs(outputPath_.string() + "config.json");
+/*
     std::string s;
     getline (ifs, s, (char) ifs.eof());
-    return s;
+
+*/
+    nlohmann::json config;
+    ifs >> config;
+    return config;
 }
 
 bool PcapCache::exists() {
-    std::string s1 = loadConfigString();
-    std::string s2 = getConfigString();
-    std::vector<std::string> sv1, sv2;
+    nlohmann::json oldConfig = loadConfigJson();
+    nlohmann::json currentConfig = getConfigJson();
 
-    boost::split(sv1, s1, boost::is_any_of("\n"));
-    boost::split(sv2, s2, boost::is_any_of("\n"));
-    int i = 1;
-    while(i < sv1.size() || i < sv2.size()) {
-        if(i == 3) {
-            i++;
-            continue;
-        }
-        if(i < sv1.size() && i < sv2.size()) {
-            if(sv1[i] != sv2[i]) {
+    for(auto& [key, value] : oldConfig.items()) {
+        if(value != currentConfig[key]) {
+            if(key == "back") {
+                backChange_ = true;
+            } else {
+                std::cout << key << " : " << value << " != " << currentConfig[key] << std::endl;
                 return false;
             }
-        } else {
-            if(i < sv1.size()) {
-                if(sv1[i] != "") {
-                    return false;
-                }
-            }
-            if(i < sv2.size()) {
-                if(sv2[i] != "") {
-                    return false;
-                }
-            }
         }
-        i++;
     }
-    
-    this->backChange = (sv1[3] != sv2[3]) ? true : false;
 
-    boost::split(sv1, sv1[0], boost::is_any_of("="));
-    totalFrame = std::stoull(sv1[1]);
+    beg_ = oldConfig["beg"].get<int>();
+    end_ = oldConfig["end"].get<int>();
+
     return true;
 }
 
-void PcapCache::setRange(const uint64_t &beg, const uint64_t &end) {
-    this->beg = beg;
-    this->end = end;
+void PcapCache::setRange(const int &beg, const int &end) {
+    beg_ = beg;
+    end_ = end;
 }
 
 void PcapCache::nextMode() {
-    mode = (mode>=2) ?  0 : (mode + 1);
+    mode_ = backNumber_ == 0 ? 0 : (mode_>=2 ?  0 : mode_ + 1);
 }
 
-bool PcapCache::convert() {
-    if(!myFunction::fileExists(outputPath.string()))
+void PcapCache::convert() {
+    if(!myFunction::fileExists(outputPath_.string()))
     {
-        mkdir(outputPath.string().c_str(), 0777);
+        mkdir(outputPath_.string().c_str(), 0777);
     }
 
-    if(!exists()) {
-        for(int64_t i = 0; i < (beg+1); i++) {
-            getCloudFromCapture();
-        }
-        totalFrame += beg;
+    if(exists()) return;
+    
+    int index = beg_;
+    for(int i = 0; i < (beg_+1); i++) {
+        getCloudFromCapture();
+    }
 
-        boost::function<void( const std::string &file_name, PointCloudPtrT &cloud )> function =
-            [] ( const std::string &file_name, PointCloudPtrT &cloud){
-                pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, *cloud);
-            };
+    boost::function<void( const std::string &file_name, PointCloudPtrT &cloud )> function =
+        [] ( const std::string &file_name, PointCloudPtrT &cloud){
+            pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, *cloud);
+        };
+    
+    std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
+
+    PointCloudPtrT cloud = nullptr;
+    while(capturesIsRun()&&(index <= end_)) {
         
+        for(auto &thread : ts) {
+            if(((cloud = getCloudFromCapture())==nullptr)||(index > end_)) {
+                break;
+            }
+            if(thread)
+            {
+                if( thread->joinable() ){
+                    thread->join();
+                    thread->~thread();
+                    delete thread;
+                    thread = nullptr;
+                    thread = new std::thread(std::bind(function, outputPath_.string() + std::to_string(index) + ".pcd", cloud));
+                }
+            } else {
+                thread = new std::thread(std::bind(function, outputPath_.string() + std::to_string(index) + ".pcd", cloud));
+            }
+            std::cout << index++ << "\033[0G" << std::flush;
+        }
+    }
+    end_ = std::min(end_, index-1);
+    
+    std::cout << std::endl << "Complete! " << frameSize() << " frames" << std::endl;
+    for(auto &thread : ts) {
+        if(thread) {
+            while( !thread->joinable() );
+            thread->join();
+            thread->~thread();
+            delete thread;
+            thread = nullptr;
+        }
+    }
+
+    if(backChange_ && (backNumber_ > 0))
+    {
+        PointCloudPtrT back = nullptr;
+        if(!myFunction::fileExists(outputPath_.string() + "/noBack/"))
+        {
+            mkdir((outputPath_.string() + "/noBack/").c_str(), 0777);
+        }
+
+        back = computeBackground();
+        pcl::io::savePCDFileBinaryCompressed<PointT>(outputPath_.string() + "/back_" + std::to_string(backNumber_) + ".pcd", *back);
         std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
 
-        myClass::MicroStopwatch tt1("getCloudFromCapture");
+        boost::function<void(const std::string file_name, const int begin, const int ended)> function =
+        [this, &back] (const std::string file_name, const int begin, const int ended){
+                myClass::backgroundSegmentation<PointT> b;                            
+                b.setBackground(back, 20.0);
 
-        while(filesIsRun()&&(totalFrame < end)) {
-            
-            for(auto &thread : ts) {
-                PointCloudPtrT cloud = nullptr;
-                tt1.start();
-                if(((cloud = getCloudFromCapture())==nullptr)||(totalFrame >= end)) {
-                    break;
-                }
-                tt1.pause();
+            for(int k = begin; k <= ended; k++){
+                if(k >= frameSize())break;
 
-                if(thread)
-                {
-                    if( thread->joinable() ){
-                        thread->join();
-                        thread->~thread();
-                        delete thread;
-                        thread = nullptr;
-                        thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", cloud));
-                    }
-                } else {
-                    thread = new std::thread(std::bind(function, outputPath.string() + std::to_string(totalFrame) + ".pcd", cloud));
-                }
-                std::cout << totalFrame << "\033[0G" << std::flush;
-                totalFrame++;
+                PointCloudPtrT temp(new PointCloudT);
+                pcl::io::loadPCDFile<PointT>( file_name + std::to_string(k) + ".pcd", *temp);
+
+                temp = b.compute(temp);
+                pcl::io::savePCDFileBinaryCompressed<PointT>(file_name + "/noBack/" + std::to_string(k) + ".pcd", *temp);
+                std::cout << k << "\033[0G" << std::flush;
+            }
+        };
+
+        for(int j = 0; j<ts.size(); j++){
+            int begin = j*frameSize()/ts.size();
+            int ended = begin+frameSize()/ts.size();
+
+            ts[j] = new std::thread(std::bind(function, outputPath_.string(), begin, ended));
+        }
+
+        for(int j = 0; j < ts.size(); j++) {
+            if(ts[j]) {
+                while( !ts[j]->joinable() );
+                ts[j]->join();
+                ts[j]->~thread();
+                delete ts[j];
+                ts[j] = nullptr;
             }
         }
-        tt1.toc();
-        std::cout << std::endl << "Complete! total: " << totalFrame << " frame" << std::endl;
-        for(auto &thread : ts) {
-            if(thread) {
-                while( !thread->joinable() );
-                thread->join();
-                thread->~thread();
-                delete thread;
-                thread = nullptr;
-            }
-        }
-    }
-
-    if((!exists())||(this->backChange)){
-        if(this->backNumber > 0)
-        {
-            if(!myFunction::fileExists(outputPath.string() + "/noBack/"))
-            {
-                mkdir((outputPath.string() + "/noBack/").c_str(), 0777);
-            }
-
-            getBackground();
-            pcl::io::savePCDFileBinaryCompressed<PointT>(outputPath.string() + "/back" + std::to_string(this->backNumber) + ".pcd", *back);
-            std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
-
-            boost::function<void(const std::string file_name, const int begin, const int ended)> function =
-            [this] (const std::string file_name, const int begin, const int ended){
-                    myClass::backgroundSegmentation<PointT> b;                            
-                    b.setBackground(this->back, 20.0);
-
-                for(int k = begin; k <= ended; k++){
-                    if(k >= this->totalFrame)break;
-
-                    boost::shared_ptr<pcl::PointCloud<PointT>> temp(new pcl::PointCloud<PointT>);
-                    pcl::io::loadPCDFile<PointT>( file_name + std::to_string(k) + ".pcd", *temp);
-
-                    temp = b.compute(temp);
-                    pcl::io::savePCDFileBinaryCompressed<PointT>(file_name + "/noBack/" + std::to_string(k) + ".pcd", *temp);
-                    std::cout << k << "\033[0G" << std::flush;
-                }
-            };
-
-            for(int j = 0; j<ts.size(); j++){
-                int begin = j*this->totalFrame/ts.size();
-                int ended = begin+this->totalFrame/ts.size();
-
-                ts[j] = new std::thread(std::bind(function, outputPath.string(), begin, ended));
-            }
-
-            for(int j = 0; j < ts.size(); j++) {
-                if(ts[j]) {
-                    while( !ts[j]->joinable() );
-                    ts[j]->join();
-                    ts[j]->~thread();
-                    delete ts[j];
-                    ts[j] = nullptr;
-                }
-            }
-        }
-    } else {
-        return true;
     }
 
     saveConfig();
-    converted = true;
-    system(("chmod 777 " + outputPath.string() + " -R").c_str());
-    return true;
+    converted_ = true;
+    system(("chmod 777 " + outputPath_.string() + " -R").c_str());
+    return;
 }
 
-boost::shared_ptr<pcl::PointCloud<PointT>> PcapCache::getBack() {
-    if(!back)back.reset(new pcl::PointCloud<PointT>());
-    pcl::io::loadPCDFile<PointT>(outputPath.string() + "/back" + std::to_string(this->backNumber) + ".pcd", *back);
+PointCloudPtrT PcapCache::getBackgroundCloud() {
+    PointCloudPtrT back(new PointCloudT);
+    pcl::io::loadPCDFile<PointT>(outputPath_.string() + "/back_" + std::to_string(backNumber_) + ".pcd", *back);
     return back;
 }
 
-void PcapCache::getBackground ()
+PointCloudPtrT PcapCache::computeBackground ()
 {
     std::vector<std::thread *> ts(std::thread::hardware_concurrency() + 1);
-    boost::shared_ptr<pcl::PointCloud<PointT>> back(new pcl::PointCloud<PointT>());
-    std::vector<boost::shared_ptr<pcl::PointCloud<PointT>>> backs(ts.size());
+    PointCloudPtrT back(new PointCloudT());
+    std::vector<PointCloudPtrT> backs(ts.size());
 
-    int d = this->totalFrame/this->compareFrameNumber/2*2;
-    int jump = this->compareFrameNumber/2;
+    int d = frameSize()/compareFrameNumber_/2*2;
+    int jump = compareFrameNumber_/2;
 
     boost::function<void(int i, int j)> function = 
     [&backs, &jump, &d, this] ( int i, int j) {
-        boost::shared_ptr<pcl::PointCloud<PointT>> temp(new pcl::PointCloud<PointT>());
-        boost::shared_ptr<pcl::PointCloud<PointT>> temp1(new pcl::PointCloud<PointT>());
-        temp = myFunction::getNoChanges<PointT>(this->get(i), this->get(i+(jump*d)), this->resolution);
-        temp1 = myFunction::getNoChanges<PointT>(this->get(i+(jump*d)), this->get(i), this->resolution);
+        PointCloudPtrT temp(new PointCloudT);
+        PointCloudPtrT temp1(new PointCloudT);
+        temp = myFunction::getNoChanges<PointT>(getCloudById(i), getCloudById(i+(jump*d)), resolution_);
+        temp1 = myFunction::getNoChanges<PointT>(getCloudById(i+(jump*d)), getCloudById(i), resolution_);
         temp = myFunction::getChanges<PointT>(backs[j], temp, 10.0);
         temp1 = myFunction::getChanges<PointT>(backs[j], temp1, 10.0);
         *backs[j] += *temp;
@@ -451,15 +429,15 @@ void PcapCache::getBackground ()
     };
     
     for(auto &cloud : backs) {
-        cloud.reset(new pcl::PointCloud<PointT>());
+        cloud.reset(new PointCloudT());
     }
 
     int i = 0;
-    while(i < int(this->totalFrame/2)){
+    while(i < int(frameSize()/2)){
         bool skip = false;
 
         for(int j = 0; j<ts.size(); j++){
-            if(i >= int(this->totalFrame/2)) { skip = true; break; }
+            if(i >= int(frameSize()/2)) { skip = true; break; }
 
             if(ts[j])
             {
@@ -492,17 +470,17 @@ void PcapCache::getBackground ()
     }
 
     for(auto cloud : backs) {
-        if(back->points.size() > this->backNumber) break;
+        if(back->points.size() > backNumber_) break;
         cloud = myFunction::getChanges<PointT>(back, cloud, 1.0);
         *back += *cloud;
         std::cout << " back size= " << back->points.size() << std::endl;
     }
 
-    this->back = back;
+    return back;
 }
 
 void PcapCache::close() {
-    for(auto &file : this->files) {
+    for(auto &file : files_) {
         file->vlp16.close();
     }
 }

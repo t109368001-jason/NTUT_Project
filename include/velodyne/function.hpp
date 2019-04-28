@@ -2,9 +2,9 @@
 #define VELODYNE_FUNCTION_H_
 
 #include <iostream>
-#ifdef HAVE_PCAP
 #include <pcap.h>
-#endif
+#include <sstream>
+#include <cassert>
 
 namespace velodyne {
     static const int MAX_NUM_LASERS = 16;
@@ -34,9 +34,7 @@ namespace velodyne {
         uint8_t sensorType;
     };
 
-            #ifdef HAVE_PCAP
-    int getPcapTotalFrame(std::string filename) {
-        int totalFrame;
+    int getFrameSize(std::string filename) {
         // Open PCAP File
         char error[PCAP_ERRBUF_SIZE];
         pcap_t* pcap = pcap_open_offline( filename.c_str(), error );
@@ -59,7 +57,12 @@ namespace velodyne {
         }
         
         double last_azimuth = 0.0;
-        
+
+        int frameSize = 0;
+        int interval = 0;
+        int intervalSum = 0;
+        int intervalCount = 0;
+        int intervalSkip = 0;
         while( true ){
             // Retrieve Header and Data from PCAP
             struct pcap_pkthdr* header;
@@ -74,7 +77,11 @@ namespace velodyne {
             if( ( header->len - 42 ) != 1206 ){
                 continue;
             }
-
+            interval++;
+            if(intervalSkip > 0) {
+                intervalSkip--;
+                continue;
+            }
             // Convert to DataPacket Structure ( Cut Header 42 bytes )
             // Sensor Type 0x21 is HDL-32E, 0x22 is VLP-16
             const DataPacket* packet = reinterpret_cast<const DataPacket*>( data + 42 );
@@ -90,7 +97,11 @@ namespace velodyne {
 
                     // Complete Retrieve Capture One Rotation Data
                     if( last_azimuth > azimuth ){
-                        totalFrame++;
+                        frameSize++;
+                        intervalSum += interval;
+                        intervalCount++;
+                        intervalSkip = std::min(74, intervalSum/intervalCount);
+                        interval = 0;
                     }
                     // Update Last Rotation Azimuth
                     last_azimuth = azimuth;
@@ -98,8 +109,7 @@ namespace velodyne {
             }
         }
 
-        return totalFrame;
+        return frameSize;
     };
-    #endif
 }
 #endif

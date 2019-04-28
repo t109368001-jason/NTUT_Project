@@ -79,10 +79,10 @@ namespace velodyne {
                 MergeItem mergeItem("/tmp/" + p.stem().string());
                 mergeItem.configFilename = m.string();
                 mergeItem.loadConfig();
-                mergeItem.cache.add(filename);
+                mergeItem.cache.addPcap(filename);
                 mergeItem.cache.setRange(0,100);
                 mergeItem.cache.convert();
-                cloud = mergeItem.cache.get(mergeItem.currentCloudIdx);
+                cloud = mergeItem.cache.getCloudById(mergeItem.currentCloudIdx);
                 pcl::transformPointCloud(*cloud, *cloud, mergeItem.transformMatrix);
                 mergeItem.showCloud = cloud;
                 
@@ -198,12 +198,12 @@ namespace velodyne {
                     currentItemIdx = ((currentItemIdx - 1) >= 0 ? (currentItemIdx - 1) : items.size() - 1);
                     std::cout << "Current file index: " << currentItemIdx << std::endl;
                 } else if((event.getKeySym() == "period")&&(event.keyDown())) {
-                    items[currentItemIdx].currentCloudIdx = ((items[currentItemIdx].currentCloudIdx+1) < items[currentItemIdx].cache.totalFrame ? items[currentItemIdx].currentCloudIdx+1 : 0);
-                    pcl::transformPointCloud(*items[currentItemIdx].cache.get(items[currentItemIdx].currentCloudIdx), *items[currentItemIdx].showCloud, items[currentItemIdx].transformMatrix);
+                    items[currentItemIdx].currentCloudIdx = ((items[currentItemIdx].currentCloudIdx+1) < items[currentItemIdx].cache.end() ? items[currentItemIdx].currentCloudIdx+1 : 0);
+                    pcl::transformPointCloud(*items[currentItemIdx].cache.getCloudById(items[currentItemIdx].currentCloudIdx), *items[currentItemIdx].showCloud, items[currentItemIdx].transformMatrix);
                     std::cout << "File " << currentItemIdx << " cloud index: " << items[currentItemIdx].currentCloudIdx << std::endl;
                 } else if((event.getKeySym() == "comma")&&(event.keyDown())) {
-                    items[currentItemIdx].currentCloudIdx = ((items[currentItemIdx].currentCloudIdx-1) >= 0 ? items[currentItemIdx].currentCloudIdx-1 : items[currentItemIdx].cache.totalFrame-1);
-                    pcl::transformPointCloud(*items[currentItemIdx].cache.get(items[currentItemIdx].currentCloudIdx), *items[currentItemIdx].showCloud, items[currentItemIdx].transformMatrix);
+                    items[currentItemIdx].currentCloudIdx = ((items[currentItemIdx].currentCloudIdx-1) >= 0 ? items[currentItemIdx].currentCloudIdx-1 : items[currentItemIdx].cache.end());
+                    pcl::transformPointCloud(*items[currentItemIdx].cache.getCloudById(items[currentItemIdx].currentCloudIdx), *items[currentItemIdx].showCloud, items[currentItemIdx].transformMatrix);
                     std::cout << "File " << currentItemIdx << " cloud index: " << items[currentItemIdx].currentCloudIdx << std::endl;
                 } else if((event.getKeySym() == "z")&&(event.keyDown())) {
                     if(items[currentItemIdx].transformMatrixPre.size() > 0) {

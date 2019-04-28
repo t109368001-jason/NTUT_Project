@@ -67,7 +67,10 @@
         "qaction": "cpp",
         "qstatusbar": "cpp",
         "qscrollarea": "cpp",
-        "hash_map": "cpp"
+        "hash_map": "cpp",
+        "forward_list": "cpp",
+        "valarray": "cpp",
+        "string": "cpp"
     },
     "command-runner.commands":{
         "command": "${workspaceFolder}/build/bin/pcl_viewer",

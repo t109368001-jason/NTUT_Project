@@ -138,7 +138,7 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
                 colorButton_ = nullptr;
             }
             if(!mediaTool_) {
-                mediaTool_ = new MediaWidget(boost::get<PcapCachePtrT>(item_)->beg, boost::get<PcapCachePtrT>(item_)->totalFrame-1, this);
+                mediaTool_ = new MediaWidget(boost::get<PcapCachePtrT>(item_)->beg(), boost::get<PcapCachePtrT>(item_)->end(), this);
                 layout_->addWidget(mediaTool_, 0, 3);
             }
             if(!modeButton_) {
@@ -155,7 +155,7 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
 
 void GUIPCLViewerItem::updateView(ViewerPtrT &viewer) {
     if(item_.which() == 2) {
-        if(boost::get<PcapCachePtrT>(item_)->currentFrameId != mediaTool_->getFrameId()) isChanged_ = true;
+        if(boost::get<PcapCachePtrT>(item_)->currentFrameId() != mediaTool_->getFrameId()) isChanged_ = true;
     }
     if(isChanged_) {
         viewer->removeShape(name_);
@@ -172,7 +172,7 @@ void GUIPCLViewerItem::updateView(ViewerPtrT &viewer) {
             } else if(item_.which() == 1) {
                 myFunction::updateCloud(viewer, boost::get<PointCloudPtrT>(item_), name_, color_.r, color_.g, color_.b);
             } else {
-                myFunction::updateCloud(viewer, boost::get<PcapCachePtrT>(item_)->get(mediaTool_->getFrameId()), name_, double(color_.data) * 1000.0);
+                myFunction::updateCloud(viewer, boost::get<PcapCachePtrT>(item_)->getCloudById(mediaTool_->getFrameId()), name_, double(color_.data) * 1000.0);
             }
         }
         isChanged_ = false;

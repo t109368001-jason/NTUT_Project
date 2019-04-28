@@ -134,7 +134,7 @@ void GUI::openFile(Mode mode) {
             outputDir = outputDir.parent_path().string() + "/pcap_cache_data/";
             boost::shared_ptr<PcapCache> pcapCache(new PcapCache(outputDir.string()));
             for(auto pcapFilename : pcapFilenames) {
-                pcapCache->add(pcapFilename, "default");
+                pcapCache->addPcap(pcapFilename, "default");
             }    
             //pcapCache->addBack(backNumber, compareFrameNumber, resolution);
             pcapCache->convert();
