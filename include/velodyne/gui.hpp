@@ -136,7 +136,7 @@ void GUI::openFile(Mode mode) {
             for(auto pcapFilename : pcapFilenames) {
                 pcapCache->addPcap(pcapFilename, "default");
             }    
-            //pcapCache->addBack(backNumber, compareFrameNumber, resolution);
+            pcapCache->setBackgroundParameters(backNumber, compareFrameNumber, resolution);
             pcapCache->convert();
             //pcapCache->showback(false);
 

@@ -267,7 +267,12 @@ bool PcapCache::exists() {
     nlohmann::json oldConfig = loadConfigJson();
     nlohmann::json currentConfig = getConfigJson();
 
+        std::cout << oldConfig.dump(2) << std::endl;
+        std::cout << "============================================" << std::endl;
+        std::cout << currentConfig.dump(2) << std::endl;
+
     for(auto& [key, value] : oldConfig.items()) {
+        std::cout << key << std::endl;
         if(value != currentConfig[key]) {
             if(key == "back") {
                 backChange_ = true;
@@ -290,7 +295,7 @@ void PcapCache::setRange(const int &beg, const int &end) {
 }
 
 void PcapCache::nextMode() {
-    mode_ = backNumber_ == 0 ? 0 : (mode_>=2 ?  0 : mode_ + 1);
+    mode_ = backNumber_ == 0 ? 0 : (mode_>=1 ?  0 : mode_ + 1);
 }
 
 void PcapCache::convert() {
@@ -299,52 +304,54 @@ void PcapCache::convert() {
         mkdir(outputPath_.string().c_str(), 0777);
     }
 
-    if(exists()) return;
+    if(exists()&&!backChange_) return;
     
     int index = beg_;
     for(int i = 0; i < (beg_+1); i++) {
         getCloudFromCapture();
     }
-
-    boost::function<void( const std::string &file_name, PointCloudPtrT &cloud )> function =
-        [] ( const std::string &file_name, PointCloudPtrT &cloud){
-            pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, *cloud);
-        };
     
-    std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
-
-    PointCloudPtrT cloud = nullptr;
-    while(capturesIsRun()&&(index <= end_)) {
+    if(!exists()) {
+        boost::function<void( const std::string &file_name, PointCloudPtrT &cloud )> function =
+            [] ( const std::string &file_name, PointCloudPtrT &cloud){
+                pcl::io::savePCDFileBinaryCompressed<PointT>(file_name, *cloud);
+            };
         
-        for(auto &thread : ts) {
-            if(((cloud = getCloudFromCapture())==nullptr)||(index > end_)) {
-                break;
-            }
-            if(thread)
-            {
-                if( thread->joinable() ){
-                    thread->join();
-                    thread->~thread();
-                    delete thread;
-                    thread = nullptr;
+        std::vector<std::thread*> ts(std::thread::hardware_concurrency()+1);
+
+        PointCloudPtrT cloud = nullptr;
+        while(capturesIsRun()&&(index <= end_)) {
+            
+            for(auto &thread : ts) {
+                if(((cloud = getCloudFromCapture())==nullptr)||(index > end_)) {
+                    break;
+                }
+                if(thread)
+                {
+                    if( thread->joinable() ){
+                        thread->join();
+                        thread->~thread();
+                        delete thread;
+                        thread = nullptr;
+                        thread = new std::thread(std::bind(function, outputPath_.string() + std::to_string(index) + ".pcd", cloud));
+                    }
+                } else {
                     thread = new std::thread(std::bind(function, outputPath_.string() + std::to_string(index) + ".pcd", cloud));
                 }
-            } else {
-                thread = new std::thread(std::bind(function, outputPath_.string() + std::to_string(index) + ".pcd", cloud));
+                std::cout << index++ << "\033[0G" << std::flush;
             }
-            std::cout << index++ << "\033[0G" << std::flush;
         }
-    }
-    end_ = std::min(end_, index-1);
-    
-    std::cout << std::endl << "Complete! " << frameSize() << " frames" << std::endl;
-    for(auto &thread : ts) {
-        if(thread) {
-            while( !thread->joinable() );
-            thread->join();
-            thread->~thread();
-            delete thread;
-            thread = nullptr;
+        end_ = std::min(end_, index-1);
+        
+        std::cout << std::endl << "Complete! " << frameSize() << " frames" << std::endl;
+        for(auto &thread : ts) {
+            if(thread) {
+                while( !thread->joinable() );
+                thread->join();
+                thread->~thread();
+                delete thread;
+                thread = nullptr;
+            }
         }
     }
 
@@ -363,7 +370,7 @@ void PcapCache::convert() {
         boost::function<void(const std::string file_name, const int begin, const int ended)> function =
         [this, &back] (const std::string file_name, const int begin, const int ended){
                 myClass::backgroundSegmentation<PointT> b;                            
-                b.setBackground(back, 20.0);
+                b.setBackground(back, resolution_);
 
             for(int k = begin; k <= ended; k++){
                 if(k >= frameSize())break;
@@ -471,7 +478,7 @@ PointCloudPtrT PcapCache::computeBackground ()
 
     for(auto cloud : backs) {
         if(back->points.size() > backNumber_) break;
-        cloud = myFunction::getChanges<PointT>(back, cloud, 1.0);
+        cloud = myFunction::getChanges<PointT>(back, cloud, 10.0);
         *back += *cloud;
         std::cout << " back size= " << back->points.size() << std::endl;
     }
