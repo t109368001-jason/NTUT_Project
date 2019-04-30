@@ -209,8 +209,7 @@ PointCloudPtrT PcapCache::getCloudById(int index) {
             break;
 
         case 2:
-            pcl::io::loadPCDFile<PointT>(outputPath_.string() + "/noBack/" + std::to_string(currentFrameId_) + ".pcd", *cloud);
-            *cloud+=*getBackgroundCloud();
+            cloud = getBackgroundCloud();
             break;
     }
     return cloud;
@@ -267,24 +266,25 @@ bool PcapCache::exists() {
     nlohmann::json oldConfig = loadConfigJson();
     nlohmann::json currentConfig = getConfigJson();
 
-        std::cout << oldConfig.dump(2) << std::endl;
-        std::cout << "============================================" << std::endl;
-        std::cout << currentConfig.dump(2) << std::endl;
-
     for(auto& [key, value] : oldConfig.items()) {
         std::cout << key << std::endl;
         if(value != currentConfig[key]) {
             if(key == "back") {
                 backChange_ = true;
+            } else if(key == "beg") {
+                if(oldConfig["beg"].get<int>() > currentConfig["beg"].get<int>()) {
+                    return false;
+                }
+            } else if(key == "end") {
+                if(oldConfig["end"].get<int>() < currentConfig["end"].get<int>()) {
+                    return false;
+                }
             } else {
                 std::cout << key << " : " << value << " != " << currentConfig[key] << std::endl;
                 return false;
             }
         }
     }
-
-    beg_ = oldConfig["beg"].get<int>();
-    end_ = oldConfig["end"].get<int>();
 
     return true;
 }
@@ -295,7 +295,7 @@ void PcapCache::setRange(const int &beg, const int &end) {
 }
 
 void PcapCache::nextMode() {
-    mode_ = backNumber_ == 0 ? 0 : (mode_>=1 ?  0 : mode_ + 1);
+    mode_ = backNumber_ == 0 ? 0 : (mode_>=2 ?  0 : mode_ + 1);
 }
 
 void PcapCache::convert() {
@@ -430,8 +430,8 @@ PointCloudPtrT PcapCache::computeBackground ()
         temp = myFunction::getNoChanges<PointT>(getCloudById(i), getCloudById(i+(jump*d)), resolution_);
         temp1 = myFunction::getNoChanges<PointT>(getCloudById(i+(jump*d)), getCloudById(i), resolution_);
         temp = myFunction::getChanges<PointT>(backs[j], temp, 10.0);
-        temp1 = myFunction::getChanges<PointT>(backs[j], temp1, 10.0);
         *backs[j] += *temp;
+        temp1 = myFunction::getChanges<PointT>(backs[j], temp1, 10.0);
         *backs[j] += *temp1;
     };
     

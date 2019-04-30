@@ -44,7 +44,7 @@ namespace velodyne {
         template<typename _ItemT>
         void setItem(std::string name, _ItemT &item);
 
-        void updateView(ViewerPtrT &viewer);
+        void updateView(ViewerPtrT &viewer, float pointSize);
 
     private:
         QGridLayout *layout_;
@@ -59,6 +59,7 @@ namespace velodyne {
         GUIPCLViewerItemT item_;
 
         Color color_;
+        float pointSize_;
 
         bool isChanged_;
 
@@ -145,7 +146,7 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
                 modeButton_ = new QPushButton(this);
                 modeButton_->setFixedSize(20,20);
                 layout_->addWidget(modeButton_, 0, 1);
-                connect(modeButton_, &QPushButton::clicked, std::bind(&PcapCache::nextMode, boost::get<PcapCachePtrT>(this->item_)));
+                connect(modeButton_, &QPushButton::clicked, [this](){boost::get<PcapCachePtrT>(this->item_)->nextMode(); isChanged_ = true;});
             }
             color_.data = 50;
             break;
@@ -153,10 +154,10 @@ void GUIPCLViewerItem::setItem(std::string name, _ItemT &item) {
     isChanged_ = true;
 }
 
-void GUIPCLViewerItem::updateView(ViewerPtrT &viewer) {
-    if(item_.which() == 2) {
-        if(boost::get<PcapCachePtrT>(item_)->currentFrameId() != mediaTool_->getFrameId()) isChanged_ = true;
-    }
+void GUIPCLViewerItem::updateView(ViewerPtrT &viewer, float pointSize) {
+    isChanged_ = pointSize_ != pointSize ? true : isChanged_;
+    pointSize_ = pointSize;
+    isChanged_ = (item_.which() == 2)&&(boost::get<PcapCachePtrT>(item_)->currentFrameId() != mediaTool_->getFrameId()) ? true : isChanged_;
     if(isChanged_) {
         viewer->removeShape(name_);
         viewer->removePointCloud(name_);
@@ -168,11 +169,14 @@ void GUIPCLViewerItem::updateView(ViewerPtrT &viewer) {
                     double d = std::sqrt((p1.x-p2.x)*(p1.x-p2.x)+(p1.y-p2.y)*(p1.y-p2.y)+(p1.z-p2.z)*(p1.z-p2.z))/1000.0;
                     nameLabel_->setText((name_ + "(" + std::to_string(d) + " m)").c_str());
                     viewer->addLine(p1, p2, double(color_.r)/255.0, double(color_.g)/255.0, double(color_.b)/255.0, name_);
+                    viewer->setShapeRenderingProperties (pcl::visualization::PCL_VISUALIZER_LINE_WIDTH, pointSize, name_);
                 }
             } else if(item_.which() == 1) {
                 myFunction::updateCloud(viewer, boost::get<PointCloudPtrT>(item_), name_, color_.r, color_.g, color_.b);
+                viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, pointSize, name_);
             } else {
                 myFunction::updateCloud(viewer, boost::get<PcapCachePtrT>(item_)->getCloudById(mediaTool_->getFrameId()), name_, double(color_.data) * 1000.0);
+                viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, pointSize, name_);
             }
         }
         isChanged_ = false;

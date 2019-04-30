@@ -30,6 +30,8 @@ namespace velodyne {
 
         std::vector<GUIPCLViewerItem*> items;
 
+        float pointSize;
+
         int pickedPointsCount;
         bool newpickedPointsItem;
         std::string pickedPointsItemName;
@@ -65,7 +67,7 @@ namespace velodyne {
 }
 
 using namespace velodyne;
-GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), pickedPointsCount(0), newpickedPointsItem(true) {
+GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), pickedPointsCount(0), newpickedPointsItem(true), pointSize(1) {
     scrollArea = new QScrollArea(this);
     vLayoutWidget = new QWidget(this);
     hLayout = new QHBoxLayout(this);
@@ -142,7 +144,7 @@ void GUIPCLViewer::deleteItem(std::string deleteName) {
 
 void GUIPCLViewer::refresh() {
     for(auto &item : items) {
-        item->updateView(viewer);
+        item->updateView(viewer, pointSize);
     }
     qvtk->update();
 }
@@ -156,6 +158,14 @@ void GUIPCLViewer::keyboardEventOccurred(const pcl::visualization::KeyboardEvent
     {
         if(!newpickedPointsItem) pickedPointsCount++;
         newpickedPointsItem = true;
+    }
+    else if((event.getKeySym() == "Up")&&(event.keyUp()))
+    {
+        pointSize = pointSize < 10 ? pointSize+1 : pointSize;
+    }
+    else if((event.getKeySym() == "Down")&&(event.keyUp()))
+    {
+        pointSize = pointSize > 1 ? pointSize-1 : pointSize;
     }
     else 
     {
