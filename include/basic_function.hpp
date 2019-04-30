@@ -37,6 +37,8 @@ namespace myFunction {
 
 	void valueToRGB(uint8_t &r, uint8_t &g, uint8_t &b, float value);
 
+	void valueToRGB2(uint8_t &r, uint8_t &g, uint8_t &b, float value);
+
 	void valueToRGB(uint32_t &rgb, float value);
 
     std::vector<float> getNormVector(const PointCloudPtrT &cloud);
@@ -136,6 +138,23 @@ namespace myFunction {
     }
 
 	void valueToRGB(uint8_t &r, uint8_t &g, uint8_t &b, float value) {
+        value *= 767.0;
+        if(value >= 0 && value < 256) {
+			r = 0;
+			g = 255;
+			b = 255 - value;
+        } else if(value >= 256 && value < 512) {
+			r = value-256;
+			g = 255;
+			b = 0;
+        } else if(value >= 512 && value < 768) {
+			r = 255;
+			g = 767-value;
+			b = 0;
+        }
+	}
+
+	void valueToRGB2(uint8_t &r, uint8_t &g, uint8_t &b, float value) {
         value *= 1280.0;
         value += 128.0;
         if(value >= 0 && value < 256) {
