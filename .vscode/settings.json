@@ -1,5 +1,4 @@
 {
-    "codegnuglobal.executable": "/usr/bin/global.exe",
     "editor.quickSuggestionsDelay": 100,
     "files.associations": {
         "system_error": "cpp",
@@ -70,7 +69,8 @@
         "hash_map": "cpp",
         "forward_list": "cpp",
         "valarray": "cpp",
-        "string": "cpp"
+        "string": "cpp",
+        "filesystem": "cpp"
     },
     "command-runner.commands":{
         "command": "${workspaceFolder}/build/bin/pcl_viewer",

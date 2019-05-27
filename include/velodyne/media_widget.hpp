@@ -63,7 +63,7 @@ MediaWidget::MediaWidget(int beg, int end, QWidget *parent) : QWidget(parent), b
     connect(playButton_, &QPushButton::clicked, this, &MediaWidget::playButtonTriggered);
     connect(peekSlider_, &QSlider::valueChanged, this, &MediaWidget::peekSliderValueChanged);
     connect(timer_, &QTimer::timeout, this, &MediaWidget::run);
-    setFrameId(0);
+    setFrameId(beg_);
 }
 
 int MediaWidget::getFrameId() {
@@ -82,7 +82,7 @@ void MediaWidget::pause() {
 
 void MediaWidget::run() {
     if(!pause_) {
-        setFrameId((frameId_+1 < end_) ? frameId_+1 : 0);
+        setFrameId((frameId_+1 < end_) ? frameId_+1 : beg_);
     }
 }
 

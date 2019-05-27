@@ -82,8 +82,8 @@ GUIPCLViewer::GUIPCLViewer(QWidget *parent) : QWidget(parent), pickedPointsCount
     scrollArea->setWidget(vLayoutWidget);
     scrollArea->setWidgetResizable(true);
 
-    hLayout->addWidget(scrollArea, 20);
-    hLayout->addWidget(qvtk, 80);
+    hLayout->addWidget(scrollArea, 25);
+    hLayout->addWidget(qvtk, 75);
 
     viewer.reset(new pcl::visualization::PCLVisualizer( "Velodyne Viewer", false));
     viewer->registerKeyboardCallback(&GUIPCLViewer::keyboardEventOccurred, *this);

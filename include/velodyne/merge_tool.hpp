@@ -324,7 +324,7 @@ namespace velodyne {
                 reg.setTransformationEpsilon (1e-6);
                 // Set the maximum distance between two correspondences (src<->tgt) to 10cm
                 // Note: adjust this based on the size of your datasets
-                reg.setMaxCorrespondenceDistance (10);  
+                reg.setMaxCorrespondenceDistance (100);  
                 // Set the point representation
                 reg.setPointRepresentation (boost::make_shared<const MyPointRepresentation> (point_representation));
 
