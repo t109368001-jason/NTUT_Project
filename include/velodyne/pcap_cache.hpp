@@ -470,7 +470,7 @@ PointCloudPtrT PcapCache::computeBackground ()
     }
     std::cout << "ABCD" << std::endl;
     {
-        pcl::octree::MyOctreePointCloud<pcl::PointXYZ, pcl::octree::OctreeContainerPointIndices, pcl::octree::OctreeContainerEmpty, pcl::octree::OctreeNBufBase<pcl::octree::OctreeContainerPointIndices, pcl::octree::OctreeContainerEmpty> > octree2(10);
+        pcl::octree::MyOctreePointCloud<pcl::PointXYZ, pcl::octree::OctreeContainerPointIndices, pcl::octree::OctreeContainerEmpty, pcl::octree::OctreeNBufBase<pcl::octree::OctreeContainerPointIndices, pcl::octree::OctreeContainerEmpty> > octree2(5);
 
         octree2.switchBuffers(0);
         octree2.setInputCloud(cloud1);

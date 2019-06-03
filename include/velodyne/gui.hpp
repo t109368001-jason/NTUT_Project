@@ -114,19 +114,20 @@ void GUI::openFile(Mode mode) {
         
         if( !filenames.isEmpty() )
         {
-            /*
+            
             std::ofstream ofs("comparison.csv");
             //pcl::io::compression_Profiles_e compressionProfile = pcl::io::LOW_RES_ONLINE_COMPRESSION_WITHOUT_COLOR;
             pcl::io::compression_Profiles_e compressionProfile = pcl::io::HIGH_RES_ONLINE_COMPRESSION_WITHOUT_COLOR;
             //pcl::io::OctreePointCloudCompression<pcl::PointXYZ> PointCloudEncoder(compressionProfile, true);
             pcl::io::OctreePointCloudCompression<pcl::PointXYZ> PointCloudDecoder;
             ofs << "name" << "," << "total points" << "," << "mae_custom" << "," << "origin" << "," << "custom" << std::endl;
-            */
+            
             for (int i =0;i<filenames.count();i++) {
+                /*
                 PointCloudPtrT cloud(new PointCloudT);
                 pcl::io::loadPCDFile(QFile::encodeName(filenames[i]).toStdString(), *cloud);
                 guiViewer->addItem<PointCloudPtrT>(QFile::encodeName(filenames[i]).toStdString(), cloud);
-                /*
+                */
                 boost::filesystem::path origin_file{QFile::encodeName(filenames[i]).toStdString()};
                 boost::filesystem::path origin_path{};
                 boost::filesystem::path custom_file{origin_file.parent_path().string() + "/../custom/" + origin_file.stem().string() + ".pcd"};
@@ -173,13 +174,13 @@ void GUI::openFile(Mode mode) {
                 ofs << origin_file.stem().string() << "," << cloud_origin->points.size() << "," << mae_custom << "," 
                     << boost::filesystem::file_size(origin_file) << ","
                     << boost::filesystem::file_size(custom_file) << std::endl;
-                    */
+                    
             }
-            /*
+            
             ofs.close();
             boost::filesystem::permissions("comparison.csv",
                             boost::filesystem::perms::all_all);
-                            */
+                            
  
         }
     } else if(mode == Mode::PCAP_VIEWER_1) {
